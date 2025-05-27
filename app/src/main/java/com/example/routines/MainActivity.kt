@@ -14,8 +14,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
-
-
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,9 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-
 import java.util.Calendar
 import java.util.Locale
 
