@@ -4,12 +4,12 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Required for Foreground Service on Android 9 (Pie) and higher -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Required for Foreground Service with type "specialUse" on Android 14+ if applicable -->
-    <!-- You might need FOREGROUND_SERVICE_MEDIA_PLAYBACK if targeting Android 14+ for certain use cases,
-         but USAGE_ALARM should generally cover it. Check latest docs if issues arise on API 34+ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
@@ -33,13 +33,13 @@
             </intent-filter>
         </activity>
         <receiver
-            android:name=".AlarmReceiver"
+            android:name=".services.AlarmReceiver"
             android:enabled="true"
             android:exported="false">  <!-- Set exported to false if only your app triggers it -->
         </receiver>
 
         <service
-            android:name=".AlarmService"
+            android:name=".services.AlarmService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">

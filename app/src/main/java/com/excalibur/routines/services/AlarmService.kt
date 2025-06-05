@@ -1,6 +1,5 @@
-package com.example.routines
+package com.excalibur.routines.services
 
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.media.AudioAttributes
@@ -14,18 +13,22 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Log
-import androidx.core.app.NotificationCompat
+import com.excalibur.routines.data.managers.AppNotificationManager
 
 class AlarmService : Service() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
+    private lateinit var notificationManager: AppNotificationManager
 
     companion object {
-        const val ACTION_START_ALARM = "com.example.routines.ACTION_START_ALARM"
-        const val ACTION_STOP_ALARM = "com.example.routines.ACTION_STOP_ALARM"
-        const val ALARM_NOTIFICATION_ID = 123 // Must be unique
-        const val ALARM_CHANNEL_ID = "alarm_channel_id" // Same as in MainActivity/AlarmReceiver
+        const val ACTION_START_ALARM = "com.excalibur.routines.ACTION_START_ALARM"
+        const val ACTION_STOP_ALARM = "com.excalibur.routines.ACTION_STOP_ALARM"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        notificationManager = AppNotificationManager(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -33,44 +36,40 @@ class AlarmService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("AlarmService", "AlarmService started with action: ${intent?.action}")
+        Log.d("AlarmService", "🚨 AlarmService started with action: ${intent?.action}")
         when (intent?.action) {
             ACTION_START_ALARM -> {
+                val alarmId = intent.getStringExtra("ALARM_ID") ?: "unknown"
                 val alarmTime = intent.getStringExtra("ALARM_TIME") ?: "Alarm"
-                startForegroundService(alarmTime)
-                startAlarmSound()
-                startVibration()
+                val alarmTitle = intent.getStringExtra("ALARM_TITLE") ?: "Routine Time"
+                Log.d("AlarmService", "Starting alarm - ID: $alarmId, Time: $alarmTime, Title: $alarmTitle")
+                
+                try {
+                    startForegroundService(alarmTime, alarmTitle)
+                    startAlarmSound()
+                    startVibration()
+                    Log.d("AlarmService", "Alarm started successfully")
+                } catch (e: Exception) {
+                    Log.e("AlarmService", "Failed to start alarm", e)
+                }
             }
 
             ACTION_STOP_ALARM -> {
+                Log.d("AlarmService", "Stopping alarm")
                 stopAlarm()
-                stopSelf() // Stop the service itself
+                stopSelf()
+            }
+            
+            else -> {
+                Log.w("AlarmService", "Unknown action: ${intent?.action}")
             }
         }
-        return START_STICKY // If service is killed, try to restart it
+        return START_STICKY
     }
 
-    private fun startForegroundService(alarmTime: String) {
-        val stopSelf = Intent(this, AlarmService::class.java).apply {
-            action = ACTION_STOP_ALARM
-        }
-        val pStopSelf = PendingIntent.getService(
-            this, 0, stopSelf, PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // This is the notification that will be shown for the foreground service
-        val notification = NotificationCompat.Builder(this, ALARM_CHANNEL_ID)
-            .setContentTitle("Alarm Ringing!")
-            .setContentText("Time: $alarmTime - Tap to stop or snooze.")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Replace with your alarm icon
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .addAction(R.drawable.ic_launcher_foreground, "Stop", pStopSelf) // Example stop action (TODO: replace with custom icon)
-            // .setContentIntent(pOpenActivity) // Optional: Tap notification to open app/alarm screen
-            .setOngoing(true) // Makes the notification non-dismissible by swiping
-            .build()
-
-        startForeground(ALARM_NOTIFICATION_ID, notification)
+    private fun startForegroundService(alarmTime: String, alarmTitle: String) {
+        val notification = notificationManager.createAlarmNotification(alarmTime, alarmTitle)
+        startForeground(AppNotificationManager.ALARM_NOTIFICATION_ID, notification)
         Log.d("AlarmService", "Foreground service started.")
     }
 

@@ -1,0 +1,20 @@
+## Alarm System Workflow
+```mermaid
+graph TD
+    I((Android System AlarmManager Detects Trigger Time)) --> J{PendingIntent Executed}
+    J --> K[Intent Broadcast to AlarmReceiver]
+    subgraph Your Application
+        K --> L{AlarmReceiver onReceive()}
+        L --> M[Extracts alarmId title from Intent]
+        M --> N[Creates Intent for AlarmService with alarmId title]
+        N --> O{AlarmService onStartCommand or Foreground Service}
+        O --> P[Performs Alarm Action e.g. Notification Sound]
+    end
+    style I fill:#f8cecc,stroke:#b85450,stroke-width:2px
+    style J fill:#f8cecc,stroke:#b85450,stroke-width:2px
+    style K fill:#e1d5e7,stroke:#9673a6,stroke-width:2px
+    style L fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px
+    style M fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px
+    style N fill:#e1d5e7,stroke:#9673a6,stroke-width:2px
+    style O fill:#d5e8d4,stroke:#82b366,stroke-width:2px
+    style P fill:#d5e8d4,stroke:#82b366,stroke-width:2px

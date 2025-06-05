@@ -1,4 +1,4 @@
-package com.example.routines.ui.theme
+package com.excalibur.routines.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
