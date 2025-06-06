@@ -58,12 +58,52 @@ fun RoutinesMainScreen(
     val routineError by routineViewModel.errorMessage.collectAsState()
     val instanceError by routineInstanceViewModel.errorMessage.collectAsState()
     
-    val showCreateRoutineDialog by routineViewModel.showCreateDialog.collectAsState()
+    val showCreateRoutineScreen by routineViewModel.showCreateScreen.collectAsState()
     val editingRoutine by routineViewModel.editingRoutine.collectAsState()
-    val showCreateInstanceDialog by routineInstanceViewModel.showCreateDialog.collectAsState()
+    val showCreateInstanceScreen by routineInstanceViewModel.showCreateScreen.collectAsState()
     val editingInstance by routineInstanceViewModel.editingInstance.collectAsState()
+    val preSelectedRoutineId by routineInstanceViewModel.preSelectedRoutineId.collectAsState()
 
     var routinesSectionExpanded by remember { mutableStateOf(false) }
+
+    // Show full-screen create experiences when needed
+    if (showCreateRoutineScreen) {
+        CreateRoutineScreen(
+            editingRoutine = editingRoutine,
+            onSave = { name, timeIntervals ->
+                val routine = editingRoutine
+                if (routine != null) {
+                    routineViewModel.updateRoutine(routine, name, timeIntervals) {
+                        routineInstanceViewModel.refreshAvailableRoutines()
+                    }
+                } else {
+                    routineViewModel.createRoutine(name, timeIntervals) {
+                        routineInstanceViewModel.refreshAvailableRoutines()
+                    }
+                }
+            },
+            onCancel = { routineViewModel.hideCreateScreen() }
+        )
+        return
+    }
+    
+    if (showCreateInstanceScreen) {
+        CreateRoutineInstanceScreen(
+            availableRoutines = availableRoutines,
+            editingInstance = editingInstance,
+            preSelectedRoutineId = preSelectedRoutineId,
+            onSave = { routineId, startTime, daysOfWeek ->
+                val instance = editingInstance
+                if (instance != null) {
+                    routineInstanceViewModel.updateRoutineInstance(instance, routineId, startTime, daysOfWeek)
+                } else {
+                    routineInstanceViewModel.createRoutineInstance(routineId, startTime, daysOfWeek)
+                }
+            },
+            onCancel = { routineInstanceViewModel.hideCreateScreen() }
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -103,7 +143,7 @@ fun RoutinesMainScreen(
                         }
                         
                         OutlinedButton(
-                            onClick = { routineInstanceViewModel.showCreateDialog() }
+                            onClick = { routineInstanceViewModel.showCreateScreen() }
                         ) {
                             Icon(
                                 Icons.Default.Add,
@@ -189,7 +229,7 @@ fun RoutinesMainScreen(
                             
                             Row {
                                 OutlinedButton(
-                                    onClick = { routineViewModel.showCreateDialog() }
+                                    onClick = { routineViewModel.showCreateScreen() }
                                 ) {
                                     Text("Create")
                                 }
@@ -230,15 +270,17 @@ fun RoutinesMainScreen(
                                                 routine = routine,
                                                 onEdit = { routineViewModel.startEditingRoutine(it) },
                                                 onDelete = { 
-                                                    routineViewModel.deleteRoutine(it)
-                                                    routineInstanceViewModel.refreshAvailableRoutines()
+                                                    routineViewModel.deleteRoutine(it) {
+                                                        routineInstanceViewModel.refreshAvailableRoutines()
+                                                    }
                                                 },
                                                 onDuplicate = { routine, newName -> 
-                                                    routineViewModel.duplicateRoutine(routine, newName)
-                                                    routineInstanceViewModel.refreshAvailableRoutines()
+                                                    routineViewModel.duplicateRoutine(routine, newName) {
+                                                        routineInstanceViewModel.refreshAvailableRoutines()
+                                                    }
                                                 },
-                                                onCreateInstance = { 
-                                                    routineInstanceViewModel.showCreateDialog()
+                                                onCreateInstance = { routine ->
+                                                    routineInstanceViewModel.showCreateScreenWithRoutine(routine.id)
                                                 }
                                             )
                                         }
@@ -279,39 +321,5 @@ fun RoutinesMainScreen(
                 }
             }
         }
-    }
-    
-    // Dialogs
-    if (showCreateRoutineDialog) {
-        CreateRoutineDialog(
-            editingRoutine = editingRoutine,
-            onConfirm = { name, timeIntervals ->
-                val routine = editingRoutine
-                if (routine != null) {
-                    routineViewModel.updateRoutine(routine, name, timeIntervals)
-                } else {
-                    routineViewModel.createRoutine(name, timeIntervals)
-                }
-                // Refresh available routines for routine instances
-                routineInstanceViewModel.refreshAvailableRoutines()
-            },
-            onDismiss = { routineViewModel.hideCreateDialog() }
-        )
-    }
-    
-    if (showCreateInstanceDialog) {
-        CreateRoutineInstanceDialog(
-            availableRoutines = availableRoutines,
-            editingInstance = editingInstance,
-            onConfirm = { routineId, startTime, daysOfWeek ->
-                val instance = editingInstance
-                if (instance != null) {
-                    routineInstanceViewModel.updateRoutineInstance(instance, routineId, startTime, daysOfWeek)
-                } else {
-                    routineInstanceViewModel.createRoutineInstance(routineId, startTime, daysOfWeek)
-                }
-            },
-            onDismiss = { routineInstanceViewModel.hideCreateDialog() }
-        )
     }
 }

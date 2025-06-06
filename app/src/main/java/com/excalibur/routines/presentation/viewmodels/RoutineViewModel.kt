@@ -29,8 +29,8 @@ class RoutineViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _showCreateDialog = MutableStateFlow(false)
-    val showCreateDialog: StateFlow<Boolean> = _showCreateDialog.asStateFlow()
+    private val _showCreateScreen = MutableStateFlow(false)
+    val showCreateScreen: StateFlow<Boolean> = _showCreateScreen.asStateFlow()
 
     private val _editingRoutine = MutableStateFlow<Routine?>(null)
     val editingRoutine: StateFlow<Routine?> = _editingRoutine.asStateFlow()
@@ -52,21 +52,21 @@ class RoutineViewModel(
         }
     }
 
-    fun showCreateDialog() {
-        _showCreateDialog.value = true
+    fun showCreateScreen() {
+        _showCreateScreen.value = true
     }
 
-    fun hideCreateDialog() {
-        _showCreateDialog.value = false
+    fun hideCreateScreen() {
+        _showCreateScreen.value = false
         _editingRoutine.value = null
     }
 
     fun startEditingRoutine(routine: Routine) {
         _editingRoutine.value = routine
-        _showCreateDialog.value = true
+        _showCreateScreen.value = true
     }
 
-    fun createRoutine(name: String, timeIntervals: List<TimeInterval>) {
+    fun createRoutine(name: String, timeIntervals: List<TimeInterval>, onComplete: (() -> Unit)? = null) {
         if (name.isBlank()) {
             _errorMessage.value = "Routine name cannot be empty"
             return
@@ -84,8 +84,9 @@ class RoutineViewModel(
                 routineRepository.createRoutine(routine).fold(
                     onSuccess = {
                         loadRoutines()
-                        hideCreateDialog()
+                        hideCreateScreen()
                         _errorMessage.value = null
+                        onComplete?.invoke()
                     },
                     onFailure = { error ->
                         _errorMessage.value = "Failed to create routine: ${error.message}"
@@ -99,7 +100,7 @@ class RoutineViewModel(
         }
     }
 
-    fun updateRoutine(routine: Routine, name: String, timeIntervals: List<TimeInterval>) {
+    fun updateRoutine(routine: Routine, name: String, timeIntervals: List<TimeInterval>, onComplete: (() -> Unit)? = null) {
         if (name.isBlank()) {
             _errorMessage.value = "Routine name cannot be empty"
             return
@@ -119,8 +120,9 @@ class RoutineViewModel(
                         // Reschedule alarms for all instances of this routine
                         rescheduleAlarmsForRoutine(updatedRoutine)
                         loadRoutines()
-                        hideCreateDialog()
+                        hideCreateScreen()
                         _errorMessage.value = null
+                        onComplete?.invoke()
                     },
                     onFailure = { error ->
                         _errorMessage.value = "Failed to update routine: ${error.message}"
@@ -134,7 +136,7 @@ class RoutineViewModel(
         }
     }
 
-    fun deleteRoutine(routine: Routine) {
+    fun deleteRoutine(routine: Routine, onComplete: (() -> Unit)? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -151,6 +153,7 @@ class RoutineViewModel(
                     onSuccess = {
                         loadRoutines()
                         _errorMessage.value = null
+                        onComplete?.invoke()
                     },
                     onFailure = { error ->
                         _errorMessage.value = "Failed to delete routine: ${error.message}"
@@ -164,7 +167,7 @@ class RoutineViewModel(
         }
     }
 
-    fun duplicateRoutine(routine: Routine, newName: String) {
+    fun duplicateRoutine(routine: Routine, newName: String, onComplete: (() -> Unit)? = null) {
         if (newName.isBlank()) {
             _errorMessage.value = "New routine name cannot be empty"
             return
@@ -177,6 +180,7 @@ class RoutineViewModel(
                     onSuccess = {
                         loadRoutines()
                         _errorMessage.value = null
+                        onComplete?.invoke()
                     },
                     onFailure = { error ->
                         _errorMessage.value = "Failed to duplicate routine: ${error.message}"

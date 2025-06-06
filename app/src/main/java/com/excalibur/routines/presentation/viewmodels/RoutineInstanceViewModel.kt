@@ -38,11 +38,14 @@ class RoutineInstanceViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _showCreateDialog = MutableStateFlow(false)
-    val showCreateDialog: StateFlow<Boolean> = _showCreateDialog.asStateFlow()
+    private val _showCreateScreen = MutableStateFlow(false)
+    val showCreateScreen: StateFlow<Boolean> = _showCreateScreen.asStateFlow()
 
     private val _editingInstance = MutableStateFlow<RoutineInstance?>(null)
     val editingInstance: StateFlow<RoutineInstance?> = _editingInstance.asStateFlow()
+    
+    private val _preSelectedRoutineId = MutableStateFlow<String?>(null)
+    val preSelectedRoutineId: StateFlow<String?> = _preSelectedRoutineId.asStateFlow()
 
     init {
         loadData()
@@ -70,18 +73,25 @@ class RoutineInstanceViewModel(
         }
     }
 
-    fun showCreateDialog() {
-        _showCreateDialog.value = true
+    fun showCreateScreen() {
+        _preSelectedRoutineId.value = null
+        _showCreateScreen.value = true
+    }
+    
+    fun showCreateScreenWithRoutine(routineId: String) {
+        _preSelectedRoutineId.value = routineId
+        _showCreateScreen.value = true
     }
 
-    fun hideCreateDialog() {
-        _showCreateDialog.value = false
+    fun hideCreateScreen() {
+        _showCreateScreen.value = false
         _editingInstance.value = null
+        _preSelectedRoutineId.value = null
     }
 
     fun startEditingInstance(instance: RoutineInstance) {
         _editingInstance.value = instance
-        _showCreateDialog.value = true
+        _showCreateScreen.value = true
     }
 
     fun createRoutineInstance(
@@ -98,7 +108,7 @@ class RoutineInstanceViewModel(
                         // Schedule alarms for the new routine instance
                         scheduleAlarmsForInstance(instance)
                         loadData()
-                        hideCreateDialog()
+                        hideCreateScreen()
                         _errorMessage.value = null
                     },
                     onFailure = { error ->
@@ -132,7 +142,7 @@ class RoutineInstanceViewModel(
                         // Reschedule alarms for the updated routine instance
                         scheduleAlarmsForInstance(updatedInstance)
                         loadData()
-                        hideCreateDialog()
+                        hideCreateScreen()
                         _errorMessage.value = null
                     },
                     onFailure = { error ->
