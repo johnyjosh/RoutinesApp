@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -107,9 +108,12 @@ fun RoutinesMainScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Routines") }
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Routines") }
+                )
+                HorizontalDivider()
+            }
         }
     ) { paddingValues ->
         LazyColumn(
@@ -117,7 +121,7 @@ fun RoutinesMainScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Routine Instances Section (Always visible)
             item {
@@ -231,7 +235,12 @@ fun RoutinesMainScreen(
                                 OutlinedButton(
                                     onClick = { routineViewModel.showCreateScreen() }
                                 ) {
-                                    Text("Create")
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                    Text("Add")
                                 }
                                 
                                 IconButton(

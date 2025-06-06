@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -112,7 +113,10 @@ fun CreateRoutineScreen(
                     coroutineScope.launch {
                         scrollState.animateScrollTo(scrollState.maxValue)
                     }
-                }
+                },
+                modifier = Modifier
+                    .imePadding()
+                    .navigationBarsPadding()
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Step")
             }
@@ -251,20 +255,19 @@ fun TimeIntervalCard(
     // Focus states
     var hoursFocused by remember { mutableStateOf(false) }
     var minutesFocused by remember { mutableStateOf(false) }
+    var hasBeenTouched by remember { mutableStateOf(false) }
     
     // Validation states
     val hoursValue = hoursText.toIntOrNull() ?: 0
     val minutesValue = minutesText.toIntOrNull() ?: 0
     val isInvalidDuration = hoursValue == 0 && minutesValue == 0
-    val showError = isInvalidDuration && !hoursFocused && !minutesFocused
+    val showError = isInvalidDuration && (hasBeenTouched || (!hoursFocused && !minutesFocused))
     val hoursHasError = showError
     val minutesHasError = showError
     
-    // Update the interval when values change (if valid)
+    // Update the interval when values change (always update to propagate validation state)
     LaunchedEffect(hoursValue, minutesValue) {
-        if (!isInvalidDuration) {
-            onUpdate(TimeInterval(interval.id, interval.name, hoursValue, minutesValue))
-        }
+        onUpdate(TimeInterval(interval.id, interval.name, hoursValue, minutesValue))
     }
     
     Card {
@@ -318,6 +321,7 @@ fun TimeIntervalCard(
                 OutlinedTextField(
                     value = hoursText,
                     onValueChange = { input ->
+                        hasBeenTouched = true
                         // Only allow digits
                         val filtered = input.filter { it.isDigit() }
                         if (filtered.length <= 2) { // Max 2 digits
@@ -343,6 +347,7 @@ fun TimeIntervalCard(
                 OutlinedTextField(
                     value = minutesText,
                     onValueChange = { input ->
+                        hasBeenTouched = true
                         // Only allow digits
                         val filtered = input.filter { it.isDigit() }
                         if (filtered.length <= 2) { // Max 2 digits
