@@ -219,6 +219,38 @@ class RoutineInstanceViewModel(
             }
         }
     }
+    
+    fun refreshRoutineInstancesAfterRoutineUpdate(updatedRoutineId: String) {
+        viewModelScope.launch {
+            try {
+                val routines = routineRepository.getAllRoutines()
+                val instances = routineInstanceRepository.getAllRoutineInstances()
+                
+                _availableRoutines.value = routines
+                
+                // Update routine instances with fresh routine data
+                _routineInstances.value = instances.map { instance ->
+                    RoutineInstanceWithRoutine(
+                        instance = instance,
+                        routine = routines.find { it.id == instance.routineId }
+                    )
+                }
+                
+                // Reschedule alarms for instances that use the updated routine
+                val updatedRoutine = routines.find { it.id == updatedRoutineId }
+                if (updatedRoutine != null) {
+                    val affectedInstances = instances.filter { it.routineId == updatedRoutineId }
+                    affectedInstances.forEach { instance ->
+                        if (instance.isEnabled) {
+                            routineAlarmScheduler.scheduleRoutineInstance(instance, updatedRoutine)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to refresh routine instances: ${e.message}"
+            }
+        }
+    }
 
     private fun scheduleAlarmsForInstance(instance: RoutineInstance) {
         viewModelScope.launch {

@@ -74,7 +74,7 @@ fun RoutinesMainScreen(
                 val routine = editingRoutine
                 if (routine != null) {
                     routineViewModel.updateRoutine(routine, name, timeIntervals) {
-                        routineInstanceViewModel.refreshAvailableRoutines()
+                        routineInstanceViewModel.refreshRoutineInstancesAfterRoutineUpdate(routine.id)
                     }
                 } else {
                     routineViewModel.createRoutine(name, timeIntervals) {
