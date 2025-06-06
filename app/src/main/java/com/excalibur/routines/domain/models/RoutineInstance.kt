@@ -33,7 +33,7 @@ data class RoutineInstance(
     }
     
     fun getDaysOfWeekString(): String {
-        if (daysOfWeek.isEmpty()) return "Never"
+        if (daysOfWeek.isEmpty()) return "One-time"
         
         val sortedDays = daysOfWeek.sortedBy { it.value }
         

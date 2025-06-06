@@ -55,10 +55,7 @@ fun CreateRoutineInstanceDialog(
         mutableStateOf(editingInstance?.startTime ?: LocalTime.of(7, 0)) 
     }
     var selectedDays by remember { 
-        mutableStateOf(
-            editingInstance?.daysOfWeek 
-                ?: setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
-        ) 
+        mutableStateOf(editingInstance?.daysOfWeek ?: emptySet()) 
     }
     
     var dropdownExpanded by remember { mutableStateOf(false) }
@@ -142,6 +139,11 @@ fun CreateRoutineInstanceDialog(
                 
                 // Days Selection
                 Text("Days of Week")
+                Text(
+                    text = if (selectedDays.isEmpty()) "One-time alarm" else "Weekly recurring alarm",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 FlowRow(
@@ -167,7 +169,7 @@ fun CreateRoutineInstanceDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(selectedRoutineId, selectedTime, selectedDays) },
-                enabled = selectedRoutineId.isNotEmpty() && selectedDays.isNotEmpty()
+                enabled = selectedRoutineId.isNotEmpty()
             ) {
                 Text(if (isEditing) "Update" else "Schedule")
             }

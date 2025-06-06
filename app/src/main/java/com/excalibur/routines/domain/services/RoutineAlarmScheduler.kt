@@ -40,9 +40,14 @@ class RoutineAlarmScheduler(
                 return Result.success(Unit)
             }
             
-            // Schedule alarms for each day of the week
-            routineInstance.daysOfWeek.forEach { dayOfWeek ->
-                scheduleRoutineForDay(routineInstance, routine, dayOfWeek).getOrThrow()
+            if (routineInstance.daysOfWeek.isEmpty()) {
+                // Schedule as one-time alarm
+                scheduleOneTimeRoutine(routineInstance, routine).getOrThrow()
+            } else {
+                // Schedule alarms for each day of the week
+                routineInstance.daysOfWeek.forEach { dayOfWeek ->
+                    scheduleRoutineForDay(routineInstance, routine, dayOfWeek).getOrThrow()
+                }
             }
             
             return Result.success(Unit)
@@ -75,6 +80,51 @@ class RoutineAlarmScheduler(
         } catch (e: Exception) {
             return Result.failure(e)
         }
+    }
+
+    /**
+     * Schedules a routine as a one-time alarm (no specific days)
+     */
+    private suspend fun scheduleOneTimeRoutine(
+        routineInstance: RoutineInstance,
+        routine: Routine
+    ): Result<Unit> {
+        var currentTime = routineInstance.startTime
+        
+        routine.timeIntervals.forEachIndexed { stepIndex, timeInterval ->
+            val alarmId = generateOneTimeAlarmId(routineInstance.id, stepIndex)
+            
+            val alarmTitle = if (stepIndex == 0) {
+                "Start: ${routine.name}"
+            } else {
+                "${routine.name} - ${timeInterval.name}"
+            }
+            
+            val alarmDescription = if (stepIndex == 0) {
+                "Time to start your ${routine.name} routine!"
+            } else {
+                "Time for: ${timeInterval.name} (${timeInterval.getDisplayString()})"
+            }
+            
+            val alarmItem = AlarmItem(
+                id = alarmId,
+                time = currentTime,
+                title = alarmTitle,
+                isEnabled = true,
+                isRepeating = false // One-time alarm
+            )
+            
+            // Schedule the one-time alarm
+            alarmRepository?.scheduleAlarm(alarmItem)?.getOrThrow()
+            
+            // Add the duration of this interval to get the next alarm time
+            if (stepIndex < routine.timeIntervals.size - 1) {
+                val durationMinutes = timeInterval.getDurationInMinutes()
+                currentTime = currentTime.plusMinutes(durationMinutes)
+            }
+        }
+        
+        return Result.success(Unit)
     }
 
     /**
@@ -154,6 +204,16 @@ class RoutineAlarmScheduler(
     }
 
     /**
+     * Generates a unique alarm ID for a one-time routine step
+     */
+    private fun generateOneTimeAlarmId(
+        routineInstanceId: String,
+        stepIndex: Int
+    ): String {
+        return "${ROUTINE_ALARM_PREFIX}${routineInstanceId}${ROUTINE_STEP_SEPARATOR}${stepIndex}_onetime"
+    }
+
+    /**
      * Checks if an alarm ID belongs to a routine
      */
     fun isRoutineAlarm(alarmId: String): Boolean {
@@ -190,13 +250,27 @@ class RoutineAlarmScheduler(
         routineInstance: RoutineInstance,
         routine: Routine
     ): LocalDateTime? {
-        if (!routineInstance.isEnabled || routineInstance.daysOfWeek.isEmpty()) {
+        if (!routineInstance.isEnabled) {
             return null
         }
         
         val now = LocalDateTime.now()
-        val today = now.dayOfWeek
         val currentTime = now.toLocalTime()
+        
+        // Handle one-time alarms (no specific days)
+        if (routineInstance.daysOfWeek.isEmpty()) {
+            val today = now.toLocalDate()
+            val alarmTime = today.atTime(routineInstance.startTime)
+            
+            // If the time hasn't passed today, schedule for today; otherwise, schedule for tomorrow
+            return if (currentTime.isBefore(routineInstance.startTime)) {
+                alarmTime
+            } else {
+                alarmTime.plusDays(1)
+            }
+        }
+        
+        val today = now.dayOfWeek
         
         // Check if we can start today
         if (routineInstance.daysOfWeek.contains(today) && 

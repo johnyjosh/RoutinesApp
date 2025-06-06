@@ -113,14 +113,27 @@ class AndroidAlarmRepository(
             Log.d(TAG, "Scheduling alarm for: ${calendar.time} (${calendar.timeInMillis})")
             Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
             
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
+            if (alarmItem.isRepeating) {
+                // For repeating daily alarms, use setRepeating with daily interval
+                Log.d(TAG, "Setting up daily recurring alarm")
+                alarmManager.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    AlarmManager.INTERVAL_DAY, // Daily interval
+                    pendingIntent
+                )
+            } else {
+                // For one-time alarms, use setExactAndAllowWhileIdle
+                Log.d(TAG, "Setting up one-time alarm")
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            }
 
             saveAlarmToPreferences(alarmItem)
-            Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()}")
+            Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} (repeating: ${alarmItem.isRepeating})")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule alarm", e)
@@ -190,14 +203,27 @@ class AndroidAlarmRepository(
             Log.d(TAG, "Scheduling alarm for: ${calendar.time} (${calendar.timeInMillis})")
             Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
             
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
+            if (alarmItem.isRepeating) {
+                // For repeating alarms, use setRepeating with weekly interval
+                Log.d(TAG, "Setting up weekly recurring alarm for ${dayOfWeek.name}")
+                alarmManager.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    AlarmManager.INTERVAL_DAY * 7, // Weekly interval
+                    pendingIntent
+                )
+            } else {
+                // For one-time alarms, use setExactAndAllowWhileIdle
+                Log.d(TAG, "Setting up one-time alarm")
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            }
 
             saveAlarmToPreferences(alarmItem)
-            Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} on ${dayOfWeek.name}")
+            Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} on ${dayOfWeek.name} (repeating: ${alarmItem.isRepeating})")
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule alarm for day", e)

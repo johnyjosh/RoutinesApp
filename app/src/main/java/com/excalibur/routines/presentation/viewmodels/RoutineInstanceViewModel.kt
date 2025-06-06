@@ -89,11 +89,6 @@ class RoutineInstanceViewModel(
         startTime: LocalTime,
         daysOfWeek: Set<DayOfWeek>
     ) {
-        if (daysOfWeek.isEmpty()) {
-            _errorMessage.value = "Please select at least one day of the week"
-            return
-        }
-
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -124,11 +119,6 @@ class RoutineInstanceViewModel(
         startTime: LocalTime,
         daysOfWeek: Set<DayOfWeek>
     ) {
-        if (daysOfWeek.isEmpty()) {
-            _errorMessage.value = "Please select at least one day of the week"
-            return
-        }
-
         viewModelScope.launch {
             _isLoading.value = true
             try {

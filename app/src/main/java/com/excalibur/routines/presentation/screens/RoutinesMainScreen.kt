@@ -70,13 +70,6 @@ fun RoutinesMainScreen(
             TopAppBar(
                 title = { Text("Routines") }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { routineInstanceViewModel.showCreateDialog() }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Routine Instance")
-            }
         }
     ) { paddingValues ->
         LazyColumn(
@@ -94,17 +87,30 @@ fun RoutinesMainScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "My Schedule",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (!routineInstances.isEmpty()) {
+                        Column {
                             Text(
-                                text = "${routineInstances.size} instances",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "My Schedule",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
                             )
+                            if (!routineInstances.isEmpty()) {
+                                Text(
+                                    text = "${routineInstances.size} instances",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        OutlinedButton(
+                            onClick = { routineInstanceViewModel.showCreateDialog() }
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                            Text("Add")
                         }
                     }
                     
