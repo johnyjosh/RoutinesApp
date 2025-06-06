@@ -42,10 +42,35 @@ class AlarmService : Service() {
                 val alarmId = intent.getStringExtra("ALARM_ID") ?: "unknown"
                 val alarmTime = intent.getStringExtra("ALARM_TIME") ?: "Alarm"
                 val alarmTitle = intent.getStringExtra("ALARM_TITLE") ?: "Routine Time"
-                Log.d("AlarmService", "Starting alarm - ID: $alarmId, Time: $alarmTime, Title: $alarmTitle")
+                
+                // Check if this is a routine alarm
+                val isRoutineAlarm = intent.getBooleanExtra("IS_ROUTINE_ALARM", false)
+                val routineStepDescription = intent.getStringExtra("ROUTINE_STEP_DESCRIPTION")
+                val routineStepIndex = intent.getIntExtra("ROUTINE_STEP_INDEX", -1)
+                
+                val displayTitle = if (isRoutineAlarm && routineStepDescription != null) {
+                    if (routineStepIndex == 0) {
+                        "🏁 $alarmTitle"
+                    } else {
+                        "⏱️ $alarmTitle"
+                    }
+                } else {
+                    alarmTitle
+                }
+                
+                val displayMessage = if (isRoutineAlarm && routineStepDescription != null) {
+                    "$routineStepDescription - $alarmTime"
+                } else {
+                    alarmTime
+                }
+                
+                Log.d("AlarmService", "Starting alarm - ID: $alarmId, Time: $alarmTime, Title: $displayTitle")
+                if (isRoutineAlarm) {
+                    Log.d("AlarmService", "🏃 Routine step: $routineStepDescription (Index: $routineStepIndex)")
+                }
                 
                 try {
-                    startForegroundService(alarmTime, alarmTitle)
+                    startForegroundService(displayMessage, displayTitle)
                     startAlarmSound()
                     startVibration()
                     Log.d("AlarmService", "Alarm started successfully")

@@ -19,8 +19,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.excalibur.routines.data.managers.AppNotificationManager
 import com.excalibur.routines.data.managers.PermissionManager
 import com.excalibur.routines.data.repositories.AndroidAlarmRepository
-import com.excalibur.routines.presentation.screens.AlarmSchedulerScreen
+import com.excalibur.routines.data.repositories.AndroidRoutineRepository
+import com.excalibur.routines.data.repositories.AndroidRoutineInstanceRepository
+import com.excalibur.routines.presentation.screens.RoutinesMainScreen
 import com.excalibur.routines.presentation.viewmodels.AlarmViewModel
+import com.excalibur.routines.presentation.viewmodels.RoutineViewModel
+import com.excalibur.routines.presentation.viewmodels.RoutineInstanceViewModel
+import com.excalibur.routines.domain.services.RoutineAlarmScheduler
 
 class MainActivity : ComponentActivity() {
     
@@ -39,15 +44,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                val sharedPreferences = getSharedPreferences("alarm_prefs", Context.MODE_PRIVATE)
-                val alarmRepository = AndroidAlarmRepository(this@MainActivity, alarmManager, sharedPreferences)
+                val sharedPreferences = getSharedPreferences("routines_prefs", Context.MODE_PRIVATE)
                 
-                val viewModel: AlarmViewModel = viewModel(
-                    factory = AlarmViewModel.Factory(alarmRepository, permissionManager)
+                // Repositories
+                val alarmRepository = AndroidAlarmRepository(this@MainActivity, alarmManager, sharedPreferences)
+                val routineRepository = AndroidRoutineRepository(sharedPreferences)
+                val routineInstanceRepository = AndroidRoutineInstanceRepository(sharedPreferences)
+                
+                // Services
+                val routineAlarmScheduler = RoutineAlarmScheduler(alarmRepository)
+                
+                // ViewModels
+                val routineViewModel: RoutineViewModel = viewModel(
+                    factory = RoutineViewModel.Factory(routineRepository, routineInstanceRepository, routineAlarmScheduler)
                 )
                 
-                AlarmSchedulerScreen(
-                    viewModel = viewModel,
+                val routineInstanceViewModel: RoutineInstanceViewModel = viewModel(
+                    factory = RoutineInstanceViewModel.Factory(routineInstanceRepository, routineRepository, routineAlarmScheduler)
+                )
+                
+                RoutinesMainScreen(
+                    routineViewModel = routineViewModel,
+                    routineInstanceViewModel = routineInstanceViewModel,
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.safeDrawing)

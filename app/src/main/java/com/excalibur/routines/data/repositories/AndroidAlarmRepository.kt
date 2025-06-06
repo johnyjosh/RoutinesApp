@@ -12,6 +12,7 @@ import com.excalibur.routines.domain.repositories.AlarmRepository
 import com.excalibur.routines.services.AlarmReceiver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
@@ -123,6 +124,83 @@ class AndroidAlarmRepository(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule alarm", e)
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun scheduleAlarmForDay(alarmItem: AlarmItem, dayOfWeek: DayOfWeek): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Attempting to schedule alarm: ${alarmItem.id} at ${alarmItem.getTimeString()} for ${dayOfWeek.name}")
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                Log.e(TAG, "Cannot schedule exact alarms - permission not granted")
+                return@withContext Result.failure(SecurityException("Cannot schedule exact alarms - please grant permission in device settings"))
+            }
+
+            val intent = Intent(context, AlarmReceiver::class.java).apply {
+                putExtra("ALARM_ID", alarmItem.id)
+                putExtra("ALARM_TIME", alarmItem.getTimeString())
+                putExtra("ALARM_TITLE", alarmItem.title)
+            }
+
+            val requestCode = alarmItem.id.hashCode()
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            // Calculate the next occurrence of the specified day of week
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, alarmItem.time.hour)
+                set(Calendar.MINUTE, alarmItem.time.minute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                
+                // Convert DayOfWeek to Calendar day (Java time uses Monday=1, Calendar uses Sunday=1)
+                val targetCalendarDay = when (dayOfWeek) {
+                    DayOfWeek.SUNDAY -> Calendar.SUNDAY
+                    DayOfWeek.MONDAY -> Calendar.MONDAY
+                    DayOfWeek.TUESDAY -> Calendar.TUESDAY
+                    DayOfWeek.WEDNESDAY -> Calendar.WEDNESDAY
+                    DayOfWeek.THURSDAY -> Calendar.THURSDAY
+                    DayOfWeek.FRIDAY -> Calendar.FRIDAY
+                    DayOfWeek.SATURDAY -> Calendar.SATURDAY
+                }
+                
+                val currentDay = get(Calendar.DAY_OF_WEEK)
+                val currentTime = Calendar.getInstance()
+                
+                // If it's the same day and time hasn't passed, schedule for today
+                if (currentDay == targetCalendarDay && after(currentTime)) {
+                    // Keep current date
+                    Log.d(TAG, "Scheduling for today (${dayOfWeek.name})")
+                } else {
+                    // Find the next occurrence of this day
+                    var daysToAdd = targetCalendarDay - currentDay
+                    if (daysToAdd <= 0) {
+                        daysToAdd += 7 // Schedule for next week
+                    }
+                    add(Calendar.DATE, daysToAdd)
+                    Log.d(TAG, "Scheduling for next ${dayOfWeek.name} in $daysToAdd days")
+                }
+            }
+
+            Log.d(TAG, "Scheduling alarm for: ${calendar.time} (${calendar.timeInMillis})")
+            Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
+            
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+
+            saveAlarmToPreferences(alarmItem)
+            Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} on ${dayOfWeek.name}")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule alarm for day", e)
             Result.failure(e)
         }
     }
