@@ -5,11 +5,6 @@ import com.excalibur.routines.domain.models.Routine
 import com.excalibur.routines.domain.models.RoutineInstance
 import com.excalibur.routines.domain.repositories.AlarmRepository
 import java.time.DayOfWeek
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
-import java.util.UUID
 
 class RoutineAlarmScheduler(
     private val alarmRepository: AlarmRepository?
@@ -239,54 +234,6 @@ class RoutineAlarmScheduler(
         }
     }
 
-    /**
-     * Gets the next alarm time for a routine instance
-     */
-    fun getNextAlarmTime(
-        routineInstance: RoutineInstance,
-        routine: Routine
-    ): LocalDateTime? {
-        if (!routineInstance.isEnabled) {
-            return null
-        }
-        
-        val now = LocalDateTime.now()
-        val currentTime = now.toLocalTime()
-        
-        // Handle one-time alarms (no specific days)
-        if (routineInstance.daysOfWeek.isEmpty()) {
-            val today = now.toLocalDate()
-            val alarmTime = today.atTime(routineInstance.startTime)
-            
-            // If the time hasn't passed today, schedule for today; otherwise, schedule for tomorrow
-            return if (currentTime.isBefore(routineInstance.startTime)) {
-                alarmTime
-            } else {
-                alarmTime.plusDays(1)
-            }
-        }
-        
-        val today = now.dayOfWeek
-        
-        // Check if we can start today
-        if (routineInstance.daysOfWeek.contains(today) && 
-            currentTime.isBefore(routineInstance.startTime)) {
-            return now.toLocalDate().atTime(routineInstance.startTime)
-        }
-        
-        // Find the next scheduled day
-        val sortedDays = routineInstance.daysOfWeek.sorted()
-        val nextDay = sortedDays.find { it.value > today.value } 
-            ?: sortedDays.first() // Wrap to next week
-        
-        val nextDate = if (nextDay.value > today.value) {
-            now.toLocalDate().with(TemporalAdjusters.nextOrSame(nextDay))
-        } else {
-            now.toLocalDate().with(TemporalAdjusters.next(nextDay))
-        }
-        
-        return nextDate.atTime(routineInstance.startTime)
-    }
 }
 
 /**

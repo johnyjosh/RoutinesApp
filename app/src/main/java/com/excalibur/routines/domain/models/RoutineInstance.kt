@@ -43,7 +43,7 @@ data class RoutineInstance(
         // Check for common patterns
         val weekdays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
         val weekends = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
-        val allDays = DayOfWeek.values().toSet()
+        val allDays = DayOfWeek.entries.toSet()
         
         return when {
             daysOfWeek == allDays -> "Every day"

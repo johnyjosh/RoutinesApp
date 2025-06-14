@@ -4,7 +4,6 @@ import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -411,7 +410,7 @@ fun CreateRoutineInstanceScreen(
                             
                             TextButton(
                                 onClick = {
-                                    selectedDays = DayOfWeek.values().toSet()
+                                    selectedDays = DayOfWeek.entries.toSet()
                                 }
                             ) {
                                 Text("Every Day")
@@ -432,18 +431,6 @@ fun CreateRoutineInstanceScreen(
             // Extra bottom padding to ensure the last field can scroll above keyboard
             Spacer(modifier = Modifier.height(200.dp))
         }
-    }
-}
-
-private fun DayOfWeek.getDisplayName(): String {
-    return when (this) {
-        DayOfWeek.MONDAY -> "Monday"
-        DayOfWeek.TUESDAY -> "Tuesday"
-        DayOfWeek.WEDNESDAY -> "Wednesday"
-        DayOfWeek.THURSDAY -> "Thursday"
-        DayOfWeek.FRIDAY -> "Friday"
-        DayOfWeek.SATURDAY -> "Saturday"
-        DayOfWeek.SUNDAY -> "Sunday"
     }
 }
 

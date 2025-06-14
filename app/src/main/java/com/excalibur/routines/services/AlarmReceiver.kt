@@ -8,7 +8,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.excalibur.routines.services.AlarmService
 import com.excalibur.routines.domain.services.RoutineAlarmScheduler
-import com.excalibur.routines.data.managers.AppNotificationManager
 
 class AlarmReceiver : BroadcastReceiver() {
     
@@ -64,33 +63,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 context.startService(serviceIntent)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start alarm service, falling back to notification-only mode", e)
-            
-            // Fallback: Show notification directly without foreground service
-            try {
-                val notificationManager = AppNotificationManager(context)
-                val displayTitle = if (routineAlarmInfo != null) {
-                    if (routineAlarmInfo.stepIndex == 0) {
-                        "🏁 $alarmTitle"
-                    } else {
-                        "⏱️ $alarmTitle"
-                    }
-                } else {
-                    alarmTitle
-                }
-                
-                val displayMessage = if (alarmDescription.isNotEmpty()) {
-                    "$alarmDescription - $alarmTime"
-                } else {
-                    alarmTime
-                }
-                
-                val notification = notificationManager.createAlarmNotification(displayMessage, displayTitle)
-                notificationManager.showNotification(notification, AppNotificationManager.ALARM_NOTIFICATION_ID)
-                Log.d(TAG, "Fallback notification shown successfully")
-            } catch (fallbackException: Exception) {
-                Log.e(TAG, "Failed to show fallback notification", fallbackException)
-            }
+            Log.e(TAG, "Failed to start alarm service", e)
         }
     }
 }
