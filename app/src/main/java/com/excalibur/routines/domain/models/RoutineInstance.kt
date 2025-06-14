@@ -8,6 +8,7 @@ import java.util.UUID
 data class RoutineInstance(
     val id: String,
     val routineId: String,
+    val name: String,
     val startTime: LocalTime,
     val daysOfWeek: Set<DayOfWeek>,
     val isEnabled: Boolean = true,
@@ -16,12 +17,14 @@ data class RoutineInstance(
     companion object {
         fun create(
             routineId: String,
+            name: String,
             startTime: LocalTime,
             daysOfWeek: Set<DayOfWeek>
         ): RoutineInstance {
             return RoutineInstance(
                 id = UUID.randomUUID().toString(),
                 routineId = routineId,
+                name = name,
                 startTime = startTime,
                 daysOfWeek = daysOfWeek
             )

@@ -99,7 +99,7 @@ class AndroidRoutineInstanceRepository(
     private fun saveRoutineInstancesToPreferences(instances: List<RoutineInstance>) {
         val instanceStrings = instances.map { instance ->
             val daysString = instance.daysOfWeek.joinToString(DAY_SEPARATOR) { it.value.toString() }
-            "${instance.id}${FIELD_SEPARATOR}${instance.routineId}${FIELD_SEPARATOR}${instance.startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}${FIELD_SEPARATOR}$daysString${FIELD_SEPARATOR}${instance.isEnabled}${FIELD_SEPARATOR}${instance.createdAt}"
+            "${instance.id}${FIELD_SEPARATOR}${instance.routineId}${FIELD_SEPARATOR}${instance.name}${FIELD_SEPARATOR}${instance.startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}${FIELD_SEPARATOR}$daysString${FIELD_SEPARATOR}${instance.isEnabled}${FIELD_SEPARATOR}${instance.createdAt}"
         }.toSet()
 
         sharedPreferences.edit()
@@ -121,22 +121,50 @@ class AndroidRoutineInstanceRepository(
 
     private fun parseRoutineInstanceString(instanceString: String): RoutineInstance {
         val parts = instanceString.split(FIELD_SEPARATOR)
-        if (parts.size < 6) throw IllegalArgumentException("Invalid routine instance format")
+        
+        // Handle backward compatibility: if old format (6 fields), create default name
+        if (parts.size == 6) {
+            val id = parts[0]
+            val routineId = parts[1]
+            val startTime = LocalTime.parse(parts[2], DateTimeFormatter.ofPattern("HH:mm"))
+            val daysOfWeek = if (parts[3].isNotEmpty()) {
+                parts[3].split(DAY_SEPARATOR).map { DayOfWeek.of(it.toInt()) }.toSet()
+            } else {
+                emptySet()
+            }
+            val isEnabled = parts[4].toBoolean()
+            val createdAt = parts[5].toLong()
+
+            return RoutineInstance(
+                id = id,
+                routineId = routineId,
+                name = "Schedule", // Default name for backward compatibility
+                startTime = startTime,
+                daysOfWeek = daysOfWeek,
+                isEnabled = isEnabled,
+                createdAt = createdAt
+            )
+        }
+        
+        // New format with name field (7 fields)
+        if (parts.size < 7) throw IllegalArgumentException("Invalid routine instance format")
 
         val id = parts[0]
         val routineId = parts[1]
-        val startTime = LocalTime.parse(parts[2], DateTimeFormatter.ofPattern("HH:mm"))
-        val daysOfWeek = if (parts[3].isNotEmpty()) {
-            parts[3].split(DAY_SEPARATOR).map { DayOfWeek.of(it.toInt()) }.toSet()
+        val name = parts[2]
+        val startTime = LocalTime.parse(parts[3], DateTimeFormatter.ofPattern("HH:mm"))
+        val daysOfWeek = if (parts[4].isNotEmpty()) {
+            parts[4].split(DAY_SEPARATOR).map { DayOfWeek.of(it.toInt()) }.toSet()
         } else {
             emptySet()
         }
-        val isEnabled = parts[4].toBoolean()
-        val createdAt = parts[5].toLong()
+        val isEnabled = parts[5].toBoolean()
+        val createdAt = parts[6].toLong()
 
         return RoutineInstance(
             id = id,
             routineId = routineId,
+            name = name,
             startTime = startTime,
             daysOfWeek = daysOfWeek,
             isEnabled = isEnabled,

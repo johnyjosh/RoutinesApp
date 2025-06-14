@@ -7,6 +7,7 @@ data class AlarmItem(
     val id: String,
     val time: LocalTime,
     val title: String = "",
+    val description: String = "",
     val isEnabled: Boolean = true,
     val isRepeating: Boolean = true
 ) {

@@ -96,13 +96,14 @@ class RoutineInstanceViewModel(
 
     fun createRoutineInstance(
         routineId: String,
+        name: String,
         startTime: LocalTime,
         daysOfWeek: Set<DayOfWeek>
     ) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val instance = RoutineInstance.create(routineId, startTime, daysOfWeek)
+                val instance = RoutineInstance.create(routineId, name, startTime, daysOfWeek)
                 routineInstanceRepository.createRoutineInstance(instance).fold(
                     onSuccess = {
                         // Schedule alarms for the new routine instance
@@ -126,6 +127,7 @@ class RoutineInstanceViewModel(
     fun updateRoutineInstance(
         instance: RoutineInstance,
         routineId: String,
+        name: String,
         startTime: LocalTime,
         daysOfWeek: Set<DayOfWeek>
     ) {
@@ -134,6 +136,7 @@ class RoutineInstanceViewModel(
             try {
                 val updatedInstance = instance.copy(
                     routineId = routineId,
+                    name = name,
                     startTime = startTime,
                     daysOfWeek = daysOfWeek
                 )

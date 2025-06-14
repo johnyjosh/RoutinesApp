@@ -94,22 +94,19 @@ class RoutineAlarmScheduler(
         routine.timeIntervals.forEachIndexed { stepIndex, timeInterval ->
             val alarmId = generateOneTimeAlarmId(routineInstance.id, stepIndex)
             
-            val alarmTitle = if (stepIndex == 0) {
-                "Start: ${routine.name}"
-            } else {
-                "${routine.name} - ${timeInterval.name}"
-            }
+            val alarmTitle = routineInstance.name
             
             val alarmDescription = if (stepIndex == 0) {
-                "Time to start your ${routine.name} routine!"
+                routine.timeIntervals.firstOrNull()?.name ?: "Start routine"
             } else {
-                "Time for: ${timeInterval.name} (${timeInterval.getDisplayString()})"
+                timeInterval.name
             }
             
             val alarmItem = AlarmItem(
                 id = alarmId,
                 time = currentTime,
                 title = alarmTitle,
+                description = alarmDescription,
                 isEnabled = true,
                 isRepeating = false // One-time alarm
             )
@@ -147,15 +144,16 @@ class RoutineAlarmScheduler(
             }
             
             val alarmDescription = if (stepIndex == 0) {
-                "Time to start your ${routine.name} routine!"
+                routine.timeIntervals.firstOrNull()?.name ?: "Start routine"
             } else {
-                "Time for: ${timeInterval.name} (${timeInterval.getDisplayString()})"
+                timeInterval.name
             }
             
             val alarmItem = AlarmItem(
                 id = alarmId,
                 time = currentTime,
                 title = alarmTitle,
+                description = alarmDescription,
                 isEnabled = true,
                 isRepeating = true
             )
@@ -184,10 +182,8 @@ class RoutineAlarmScheduler(
             return Result.failure(IllegalStateException("AlarmRepository not available"))
         }
         
-        // Create a modified alarm item with day-specific ID
-        val daySpecificAlarm = alarmItem.copy(
-            id = "${alarmItem.id}_${dayOfWeek.name.lowercase()}"
-        )
+        // The alarm ID already contains the day-specific suffix from generateAlarmId
+        val daySpecificAlarm = alarmItem
         
         return alarmRepository.scheduleAlarmForDay(daySpecificAlarm, dayOfWeek)
     }

@@ -93,12 +93,12 @@ fun RoutinesMainScreen(
             availableRoutines = availableRoutines,
             editingInstance = editingInstance,
             preSelectedRoutineId = preSelectedRoutineId,
-            onSave = { routineId, startTime, daysOfWeek ->
+            onSave = { routineId, name, startTime, daysOfWeek ->
                 val instance = editingInstance
                 if (instance != null) {
-                    routineInstanceViewModel.updateRoutineInstance(instance, routineId, startTime, daysOfWeek)
+                    routineInstanceViewModel.updateRoutineInstance(instance, routineId, name, startTime, daysOfWeek)
                 } else {
-                    routineInstanceViewModel.createRoutineInstance(routineId, startTime, daysOfWeek)
+                    routineInstanceViewModel.createRoutineInstance(routineId, name, startTime, daysOfWeek)
                 }
             },
             onCancel = { routineInstanceViewModel.hideCreateScreen() }
@@ -120,8 +120,8 @@ fun RoutinesMainScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp, vertical = 1.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             // Routine Instances Section (Always visible)
             item {
@@ -171,20 +171,14 @@ fun RoutinesMainScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "No routine instances yet",
+                                    text = "No schedules yet",
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Text(
-                                    text = "Create a routine first, then add instances to schedule them",
+                                    text = "Create a routine first, then add schedules to run them at specific times",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                OutlinedButton(
-                                    onClick = { routinesSectionExpanded = true }
-                                ) {
-                                    Text("Manage Routines")
-                                }
                             }
                         }
                     }

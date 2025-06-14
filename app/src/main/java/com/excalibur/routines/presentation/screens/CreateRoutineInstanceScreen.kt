@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
@@ -23,6 +23,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,7 +56,7 @@ fun CreateRoutineInstanceScreen(
     availableRoutines: List<Routine>,
     editingInstance: RoutineInstance? = null,
     preSelectedRoutineId: String? = null,
-    onSave: (String, LocalTime, Set<DayOfWeek>) -> Unit,
+    onSave: (String, String, LocalTime, Set<DayOfWeek>) -> Unit,
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
@@ -67,6 +68,11 @@ fun CreateRoutineInstanceScreen(
                 ?: availableRoutines.firstOrNull()?.id 
                 ?: ""
         ) 
+    }
+    var scheduleName by remember {
+        mutableStateOf(
+            editingInstance?.name ?: ""
+        )
     }
     var selectedTime by remember { 
         mutableStateOf(editingInstance?.startTime ?: LocalTime.of(7, 0)) 
@@ -80,7 +86,12 @@ fun CreateRoutineInstanceScreen(
     val selectedRoutine = availableRoutines.find { it.id == selectedRoutineId }
     val scrollState = rememberScrollState()
     
-    val isValid = selectedRoutineId.isNotEmpty()
+    // Set default name when routine changes (only if not editing and name is empty)
+    if (!isEditing && scheduleName.isEmpty() && selectedRoutine != null) {
+        scheduleName = selectedRoutine.name
+    }
+    
+    val isValid = selectedRoutineId.isNotEmpty() && scheduleName.isNotBlank()
     
     // Handle Android back button
     BackHandler {
@@ -95,12 +106,12 @@ fun CreateRoutineInstanceScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Cancel")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cancel")
                     }
                 },
                 actions = {
                     TextButton(
-                        onClick = { onSave(selectedRoutineId, selectedTime, selectedDays) },
+                        onClick = { onSave(selectedRoutineId, scheduleName, selectedTime, selectedDays) },
                         enabled = isValid
                     ) {
                         Text(
@@ -156,7 +167,7 @@ fun CreateRoutineInstanceScreen(
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .menuAnchor()
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
                             )
                             
                             ExposedDropdownMenu(
@@ -218,6 +229,39 @@ fun CreateRoutineInstanceScreen(
                             }
                         }
                     }
+                }
+            }
+            
+            // Schedule Name
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Schedule Name",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = scheduleName,
+                        onValueChange = { scheduleName = it },
+                        label = { Text("Name") },
+                        placeholder = { Text("Enter schedule name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    
+                    Text(
+                        text = "Give your schedule a descriptive name",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
             

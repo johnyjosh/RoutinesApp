@@ -42,13 +42,14 @@ class AlarmService : Service() {
                 val alarmId = intent.getStringExtra("ALARM_ID") ?: "unknown"
                 val alarmTime = intent.getStringExtra("ALARM_TIME") ?: "Alarm"
                 val alarmTitle = intent.getStringExtra("ALARM_TITLE") ?: "Routine Time"
+                val alarmDescription = intent.getStringExtra("ALARM_DESCRIPTION") ?: ""
                 
                 // Check if this is a routine alarm
                 val isRoutineAlarm = intent.getBooleanExtra("IS_ROUTINE_ALARM", false)
                 val routineStepDescription = intent.getStringExtra("ROUTINE_STEP_DESCRIPTION")
                 val routineStepIndex = intent.getIntExtra("ROUTINE_STEP_INDEX", -1)
                 
-                val displayTitle = if (isRoutineAlarm && routineStepDescription != null) {
+                val displayTitle = if (isRoutineAlarm && alarmDescription.isNotEmpty()) {
                     if (routineStepIndex == 0) {
                         "🏁 $alarmTitle"
                     } else {
@@ -58,8 +59,8 @@ class AlarmService : Service() {
                     alarmTitle
                 }
                 
-                val displayMessage = if (isRoutineAlarm && routineStepDescription != null) {
-                    "$routineStepDescription - $alarmTime"
+                val displayMessage = if (isRoutineAlarm && alarmDescription.isNotEmpty()) {
+                    "$alarmDescription - $alarmTime"
                 } else {
                     alarmTime
                 }

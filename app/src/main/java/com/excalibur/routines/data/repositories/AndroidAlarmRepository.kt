@@ -88,6 +88,7 @@ class AndroidAlarmRepository(
                 putExtra("ALARM_ID", alarmItem.id)
                 putExtra("ALARM_TIME", alarmItem.getTimeString())
                 putExtra("ALARM_TITLE", alarmItem.title)
+                putExtra("ALARM_DESCRIPTION", alarmItem.description)
             }
 
             val requestCode = alarmItem.id.hashCode()
@@ -154,6 +155,7 @@ class AndroidAlarmRepository(
                 putExtra("ALARM_ID", alarmItem.id)
                 putExtra("ALARM_TIME", alarmItem.getTimeString())
                 putExtra("ALARM_TITLE", alarmItem.title)
+                putExtra("ALARM_DESCRIPTION", alarmItem.description)
             }
 
             val requestCode = alarmItem.id.hashCode()
