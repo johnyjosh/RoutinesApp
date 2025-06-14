@@ -281,10 +281,6 @@ class RoutineInstanceViewModel(
         }
     }
 
-    fun isInstanceExpanded(instanceId: String): Boolean {
-        return _expandedInstances.value.contains(instanceId)
-    }
-
     class Factory(
         private val routineInstanceRepository: RoutineInstanceRepository,
         private val routineRepository: RoutineRepository,
