@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -378,8 +379,32 @@ fun CreateRoutineInstanceScreen(
                                 label = { 
                                     Text(
                                         text = day.getShortDisplayName(),
-                                        style = MaterialTheme.typography.bodySmall
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = if (selectedDays.contains(day)) FontWeight.Bold else FontWeight.Normal
                                     ) 
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    labelColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                border = if (selectedDays.contains(day)) {
+                                    FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = true,
+                                        borderColor = MaterialTheme.colorScheme.primary,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary,
+                                        borderWidth = 2.dp,
+                                        selectedBorderWidth = 2.dp
+                                    )
+                                } else {
+                                    FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = false,
+                                        borderColor = MaterialTheme.colorScheme.outline,
+                                        selectedBorderColor = MaterialTheme.colorScheme.primary
+                                    )
                                 },
                                 modifier = Modifier.weight(1f)
                             )

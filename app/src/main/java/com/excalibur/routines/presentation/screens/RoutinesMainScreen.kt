@@ -62,6 +62,7 @@ fun RoutinesMainScreen(
     val showCreateInstanceScreen by routineInstanceViewModel.showCreateScreen.collectAsState()
     val editingInstance by routineInstanceViewModel.editingInstance.collectAsState()
     val preSelectedRoutineId by routineInstanceViewModel.preSelectedRoutineId.collectAsState()
+    val expandedInstances by routineInstanceViewModel.expandedInstances.collectAsState()
 
     var routinesSectionExpanded by remember { mutableStateOf(false) }
 
@@ -187,9 +188,11 @@ fun RoutinesMainScreen(
             items(routineInstances) { routineInstanceWithRoutine ->
                 RoutineInstanceCard(
                     routineInstanceWithRoutine = routineInstanceWithRoutine,
+                    isExpanded = expandedInstances.contains(routineInstanceWithRoutine.instance.id),
                     onToggle = { routineInstanceViewModel.toggleRoutineInstance(it.instance) },
                     onEdit = { routineInstanceViewModel.startEditingInstance(it.instance) },
-                    onDelete = { routineInstanceViewModel.deleteRoutineInstance(it.instance) }
+                    onDelete = { routineInstanceViewModel.deleteRoutineInstance(it.instance) },
+                    onExpandToggle = { instanceId -> routineInstanceViewModel.toggleInstanceExpansion(instanceId) }
                 )
             }
 

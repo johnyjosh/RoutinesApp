@@ -47,6 +47,10 @@ class RoutineInstanceViewModel(
     private val _preSelectedRoutineId = MutableStateFlow<String?>(null)
     val preSelectedRoutineId: StateFlow<String?> = _preSelectedRoutineId.asStateFlow()
 
+    // Track expansion state for each routine instance
+    private val _expandedInstances = MutableStateFlow<Set<String>>(emptySet())
+    val expandedInstances: StateFlow<Set<String>> = _expandedInstances.asStateFlow()
+
     init {
         loadData()
     }
@@ -266,6 +270,19 @@ class RoutineInstanceViewModel(
                 _errorMessage.value = "Failed to schedule alarms: ${e.message}"
             }
         }
+    }
+
+    fun toggleInstanceExpansion(instanceId: String) {
+        val currentExpanded = _expandedInstances.value
+        _expandedInstances.value = if (currentExpanded.contains(instanceId)) {
+            currentExpanded - instanceId
+        } else {
+            currentExpanded + instanceId
+        }
+    }
+
+    fun isInstanceExpanded(instanceId: String): Boolean {
+        return _expandedInstances.value.contains(instanceId)
     }
 
     class Factory(
