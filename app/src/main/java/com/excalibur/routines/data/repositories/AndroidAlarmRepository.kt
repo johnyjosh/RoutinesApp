@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
+import com.excalibur.routines.MainActivity
 import com.excalibur.routines.domain.models.AlarmItem
 import com.excalibur.routines.domain.repositories.AlarmRepository
 import com.excalibur.routines.services.AlarmReceiver
@@ -60,11 +61,17 @@ class AndroidAlarmRepository(
             Log.d(TAG, "Scheduling TEST alarm for: ${calendar.time} (${calendar.timeInMillis})")
             Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
             
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
+            // Create show intent for when user taps alarm icon in status bar
+            val showIntent = PendingIntent.getActivity(
+                context,
+                requestCode + 10000, // Different request code to avoid conflicts
+                Intent(context, com.excalibur.routines.MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
+            
+            // Use setAlarmClock for highest priority and reliability
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, showIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
 
             // Don't save test alarms to preferences
             Log.d(TAG, "TEST alarm successfully scheduled for ${alarmItem.getTimeString()}")
@@ -114,24 +121,21 @@ class AndroidAlarmRepository(
             Log.d(TAG, "Scheduling alarm for: ${calendar.time} (${calendar.timeInMillis})")
             Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
             
-            if (alarmItem.isRepeating) {
-                // For repeating daily alarms, use setRepeating with daily interval
-                Log.d(TAG, "Setting up daily recurring alarm")
-                alarmManager.setRepeating(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    AlarmManager.INTERVAL_DAY, // Daily interval
-                    pendingIntent
-                )
-            } else {
-                // For one-time alarms, use setExactAndAllowWhileIdle
-                Log.d(TAG, "Setting up one-time alarm")
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
-                )
-            }
+            // Create show intent for when user taps alarm icon in status bar
+            val showIntent = PendingIntent.getActivity(
+                context,
+                requestCode + 10000, // Different request code to avoid conflicts
+                Intent(context, com.excalibur.routines.MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            
+            // Use setAlarmClock for highest priority and reliability (both repeating and one-time)
+            Log.d(TAG, "Setting up alarm using setAlarmClock for maximum reliability")
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, showIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            
+            Log.d(TAG, "Alarm type: ${if (alarmItem.isRepeating) "repeating" else "one-time"}")
+            // Note: For repeating behavior, we handle rescheduling manually in AlarmReceiver
 
             saveAlarmToPreferences(alarmItem)
             Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} (repeating: ${alarmItem.isRepeating})")
@@ -205,24 +209,21 @@ class AndroidAlarmRepository(
             Log.d(TAG, "Scheduling alarm for: ${calendar.time} (${calendar.timeInMillis})")
             Log.d(TAG, "Current time: ${Calendar.getInstance().time}")
             
-            if (alarmItem.isRepeating) {
-                // For repeating alarms, use setRepeating with weekly interval
-                Log.d(TAG, "Setting up weekly recurring alarm for ${dayOfWeek.name}")
-                alarmManager.setRepeating(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    AlarmManager.INTERVAL_DAY * 7, // Weekly interval
-                    pendingIntent
-                )
-            } else {
-                // For one-time alarms, use setExactAndAllowWhileIdle
-                Log.d(TAG, "Setting up one-time alarm")
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
-                )
-            }
+            // Create show intent for when user taps alarm icon in status bar
+            val showIntent = PendingIntent.getActivity(
+                context,
+                requestCode + 10000, // Different request code to avoid conflicts
+                Intent(context, com.excalibur.routines.MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            
+            // Use setAlarmClock for highest priority and reliability
+            Log.d(TAG, "Setting up alarm using setAlarmClock for ${dayOfWeek.name}")
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, showIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            
+            Log.d(TAG, "Alarm type: ${if (alarmItem.isRepeating) "weekly recurring" else "one-time"} for ${dayOfWeek.name}")
+            // Note: For repeating behavior, we handle rescheduling manually in AlarmReceiver
 
             saveAlarmToPreferences(alarmItem)
             Log.d(TAG, "Alarm successfully scheduled for ${alarmItem.getTimeString()} on ${dayOfWeek.name} (repeating: ${alarmItem.isRepeating})")
