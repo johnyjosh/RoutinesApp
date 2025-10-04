@@ -259,6 +259,5 @@ object AlarmSoundManager {
             }
         }
     }
-    
-    fun isAlarmPlaying(): Boolean = isPlaying
+
 }
