@@ -2,6 +2,9 @@ package com.excalibur.routines.presentation.routinelist
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,11 +21,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -56,6 +63,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,11 +73,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.RoutineSchedule
 import com.excalibur.routines.domain.model.RoutineWithDetails
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +97,8 @@ fun RoutineListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val hapticFeedback = LocalHapticFeedback.current
     var routineToDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var routineToPermanentlyDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
 
@@ -132,6 +146,7 @@ fun RoutineListScreen(
                 }
                 else -> {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -152,7 +167,18 @@ fun RoutineListScreen(
                                     routineWithDetails = routineWithDetails,
                                     onStart = { onStartRoutine(routineWithDetails.routine.id) },
                                     onEdit = { onEditRoutine(routineWithDetails.routine.id) },
-                                    onDuplicate = { viewModel.duplicateRoutine(routineWithDetails) },
+                                    onDuplicate = {
+                                        viewModel.duplicateRoutine(routineWithDetails)
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "✨ Duplicated as '${routineWithDetails.routine.name} (Copy)'",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                            delay(150)
+                                            listState.animateScrollToItem(uiState.routines.size)
+                                        }
+                                    },
                                     onDelete = { routineToDelete = routineWithDetails },
                                     onAddSchedule = { onAddSchedule(routineWithDetails.routine.id) },
                                     onEditSchedule = { scheduleId ->
@@ -181,7 +207,14 @@ fun RoutineListScreen(
                                             )
                                         }
                                     },
-                                    onPermanentlyDelete = { routineToPermanentlyDelete = it }
+                                    onPermanentlyDelete = { routineToPermanentlyDelete = it },
+                                    onExpand = {
+                                        coroutineScope.launch {
+                                            delay(250)
+                                            val trashIndex = if (uiState.routines.isEmpty()) 1 else uiState.routines.size
+                                            listState.animateScrollToItem(trashIndex)
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -263,6 +296,19 @@ fun RoutineCard(
     onDeleteSchedule: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var isCopying by remember { mutableStateOf(false) }
+    val copyScale by animateFloatAsState(
+        targetValue = if (isCopying) 1.35f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "copyScale"
+    )
+
+    LaunchedEffect(isCopying) {
+        if (isCopying) {
+            delay(700)
+            isCopying = false
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -329,8 +375,20 @@ fun RoutineCard(
                 }
 
                 Row {
-                    IconButton(onClick = onDuplicate) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", modifier = Modifier.size(20.dp))
+                    IconButton(
+                        onClick = {
+                            isCopying = true
+                            onDuplicate()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (isCopying) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = "Duplicate",
+                            tint = if (isCopying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .scale(copyScale)
+                        )
                     }
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(20.dp))
@@ -669,12 +727,28 @@ fun TrashSection(
     archivedRoutines: List<RoutineWithDetails>,
     onRestore: (RoutineWithDetails) -> Unit,
     onPermanentlyDelete: (RoutineWithDetails) -> Unit,
+    onExpand: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun toggleExpanded() {
+        isExpanded = !isExpanded
+        if (isExpanded) {
+            onExpand?.invoke()
+            coroutineScope.launch {
+                delay(200)
+                bringIntoViewRequester.bringIntoView()
+            }
+        }
+    }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -684,7 +758,7 @@ fun TrashSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded },
+                    .clickable { toggleExpanded() },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -719,7 +793,7 @@ fun TrashSection(
                     }
                 }
 
-                IconButton(onClick = { isExpanded = !isExpanded }) {
+                IconButton(onClick = { toggleExpanded() }) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = if (isExpanded) "Collapse" else "Expand"
