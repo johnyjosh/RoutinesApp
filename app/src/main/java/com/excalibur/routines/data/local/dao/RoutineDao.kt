@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 interface RoutineDao {
 
     @Transaction
-    @Query("SELECT * FROM routines WHERE isArchived = 0 ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM routines WHERE isArchived = 0 ORDER BY createdAt ASC")
     fun getAllRoutinesWithDetails(): Flow<List<RoutineWithDetailsRelation>>
 
     @Transaction

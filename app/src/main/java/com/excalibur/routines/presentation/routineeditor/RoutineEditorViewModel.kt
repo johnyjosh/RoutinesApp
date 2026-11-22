@@ -24,6 +24,7 @@ data class RoutineEditorUiState(
     val description: String = "",
     val icon: String = "🦊",
     val steps: List<RoutineStep> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
     val isSaving: Boolean = false,
     val isNew: Boolean = true
 )
@@ -52,6 +53,7 @@ class RoutineEditorViewModel @Inject constructor(
                             description = existing.routine.description,
                             icon = existing.routine.icon,
                             steps = existing.steps,
+                            createdAt = existing.routine.createdAt,
                             isNew = false
                         )
                     }
@@ -138,7 +140,8 @@ class RoutineEditorViewModel @Inject constructor(
                 id = current.routineId,
                 name = current.name.trim(),
                 description = current.description.trim(),
-                icon = current.icon
+                icon = current.icon,
+                createdAt = current.createdAt
             )
             saveRoutineUseCase(routine, current.steps)
             onSuccess()
@@ -159,7 +162,8 @@ class RoutineEditorViewModel @Inject constructor(
                 id = current.routineId,
                 name = effectiveName,
                 description = current.description.trim(),
-                icon = current.icon
+                icon = current.icon,
+                createdAt = current.createdAt
             )
             saveRoutineUseCase(routine, current.steps)
             onNavigateBack()
