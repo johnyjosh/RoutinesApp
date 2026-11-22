@@ -61,7 +61,14 @@ fun RoutinesNavHost(
             val viewModel: ActiveSessionViewModel = hiltViewModel()
             ActiveSessionScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = {
+                    val popped = navController.popBackStack(Screen.RoutineList, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(Screen.RoutineList) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                }
             )
         }
     }
