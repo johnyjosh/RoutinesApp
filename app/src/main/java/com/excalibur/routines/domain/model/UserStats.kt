@@ -1,11 +1,19 @@
 package com.excalibur.routines.domain.model
 
+data class CompanionAvatar(
+    val emoji: String,
+    val name: String,
+    val requiredLevel: Int
+)
+
 data class UserStats(
     val totalPoints: Int = 0,
     val currentStreak: Int = 0,
     val bestStreak: Int = 0,
     val lastCompletedDate: String? = null,
-    val routinesCompletedCount: Int = 0
+    val routinesCompletedCount: Int = 0,
+    val streakFreezesAvailable: Int = 1,
+    val lastFreezeUsedDate: String? = null
 ) {
     val level: Int
         get() = when {
@@ -25,6 +33,7 @@ data class UserStats(
             3 -> "Routine Master"
             4 -> "Focus Champion"
             5 -> "Zen Grandmaster"
+            6 -> "Enlightened Hero"
             else -> "Legendary Achiever"
         }
 
@@ -59,4 +68,24 @@ data class UserStats(
 
     val pointsToNextLevel: Int
         get() = (nextLevelThreshold - totalPoints).coerceAtLeast(0)
+
+    fun isAvatarUnlocked(avatar: CompanionAvatar): Boolean {
+        return level >= avatar.requiredLevel
+    }
+
+    companion object {
+        val ALL_COMPANIONS = listOf(
+            CompanionAvatar("🦊", "Fox", 1),
+            CompanionAvatar("🐻", "Bear", 1),
+            CompanionAvatar("🐱", "Cat", 2),
+            CompanionAvatar("🐶", "Puppy", 2),
+            CompanionAvatar("🐼", "Panda", 3),
+            CompanionAvatar("🐨", "Koala", 3),
+            CompanionAvatar("🦁", "Lion", 4),
+            CompanionAvatar("🐯", "Tiger", 4),
+            CompanionAvatar("🦉", "Wise Owl", 5),
+            CompanionAvatar("🐲", "Dragon", 6),
+            CompanionAvatar("🦄", "Unicorn", 7)
+        )
+    }
 }

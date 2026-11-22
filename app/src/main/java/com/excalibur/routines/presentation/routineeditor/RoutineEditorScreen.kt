@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.excalibur.routines.domain.model.RoutineAvatar
 import com.excalibur.routines.domain.model.RoutineStep
 import kotlinx.coroutines.launch
@@ -86,6 +88,9 @@ fun RoutineEditorScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     var expandedStepId by remember { mutableStateOf<String?>(null) }
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val itemHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
 
     // Auto-save on system back gesture
     BackHandler {
@@ -259,19 +264,42 @@ fun RoutineEditorScreen(
             } else {
                 itemsIndexed(uiState.steps, key = { _, step -> step.id }) { index, step ->
                     val isExpanded = expandedStepId == step.id
+                    val isBeingDragged = draggedIndex == index
+
                     InlineStepCard(
                         step = step,
                         index = index,
                         totalSteps = uiState.steps.size,
                         isExpanded = isExpanded,
+                        isBeingDragged = isBeingDragged,
+                        dragOffsetY = dragOffsetY,
                         onToggleExpand = {
                             expandedStepId = if (isExpanded) null else step.id
                         },
                         onUpdateStep = { name, mins, isForceful ->
                             viewModel.updateStep(step.id, name, mins, isForceful)
                         },
-                        onMoveUp = { viewModel.moveStep(index, index - 1) },
-                        onMoveDown = { viewModel.moveStep(index, index + 1) },
+                        onDragStart = {
+                            draggedIndex = index
+                            dragOffsetY = 0f
+                        },
+                        onDrag = { deltaY ->
+                            dragOffsetY += deltaY
+                            val current = draggedIndex ?: return@InlineStepCard
+                            if (dragOffsetY > itemHeightPx * 0.7f && current < uiState.steps.size - 1) {
+                                viewModel.moveStep(current, current + 1)
+                                draggedIndex = current + 1
+                                dragOffsetY -= itemHeightPx
+                            } else if (dragOffsetY < -itemHeightPx * 0.7f && current > 0) {
+                                viewModel.moveStep(current, current - 1)
+                                draggedIndex = current - 1
+                                dragOffsetY += itemHeightPx
+                            }
+                        },
+                        onDragEnd = {
+                            draggedIndex = null
+                            dragOffsetY = 0f
+                        },
                         onRemove = {
                             if (expandedStepId == step.id) expandedStepId = null
                             val removedStep = step
@@ -301,20 +329,29 @@ fun InlineStepCard(
     index: Int,
     totalSteps: Int,
     isExpanded: Boolean,
+    isBeingDragged: Boolean,
+    dragOffsetY: Float,
     onToggleExpand: () -> Unit,
     onUpdateStep: (name: String, minutes: Int, isForceful: Boolean) -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
     onRemove: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val density = LocalDensity.current
-    var dragAccumulator by remember { mutableFloatStateOf(0f) }
-    val dragThresholdPx = with(density) { 56.dp.toPx() }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .zIndex(if (isBeingDragged) 10f else 1f)
+            .graphicsLayer {
+                if (isBeingDragged) {
+                    translationY = dragOffsetY
+                    scaleX = 1.03f
+                    scaleY = 1.03f
+                    shadowElevation = 16.dp.toPx()
+                }
+            }
             .animateContentSize(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -341,30 +378,24 @@ fun InlineStepCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Grab Bar for Tactile Drag Reordering
+                    // Grab Bar for Smooth Continuous Drag Reordering
                     Box(
                         modifier = Modifier
                             .padding(end = 8.dp)
                             .size(36.dp)
-                            .pointerInput(index, totalSteps) {
+                            .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragStart = {
-                                        dragAccumulator = 0f
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onDragStart()
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
-                                        dragAccumulator += dragAmount.y
-                                        if (dragAccumulator > dragThresholdPx && index < totalSteps - 1) {
-                                            onMoveDown()
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            dragAccumulator = 0f
-                                        } else if (dragAccumulator < -dragThresholdPx && index > 0) {
-                                            onMoveUp()
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            dragAccumulator = 0f
-                                        }
-                                    }
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onDrag(dragAmount.y)
+                                    },
+                                    onDragEnd = onDragEnd,
+                                    onDragCancel = onDragEnd
                                 )
                             },
                         contentAlignment = Alignment.Center
@@ -372,7 +403,7 @@ fun InlineStepCard(
                         Icon(
                             imageVector = Icons.Default.DragHandle,
                             contentDescription = "Hold and drag to reorder",
-                            tint = MaterialTheme.colorScheme.outline
+                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                         )
                     }
 

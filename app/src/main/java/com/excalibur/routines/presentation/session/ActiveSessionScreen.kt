@@ -263,20 +263,52 @@ fun ActiveSessionScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = uiState.routine?.icon ?: "🦊",
-                            fontSize = 42.sp
+                            fontSize = 38.sp
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = uiState.formattedRemainingTime,
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
-                            text = if (uiState.isPaused) "PAUSED" else "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size}",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = if (uiState.isPaused) "PAUSED" else "Step ${uiState.currentStepIndex + 1} of ${uiState.steps.size} • 🏁 ${uiState.formattedEstimatedFinishTime}",
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = if (uiState.isPaused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                         )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                onClick = { viewModel.addTimeToCurrentStep(60) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                            ) {
+                                Text(
+                                    text = "+1m",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Surface(
+                                onClick = { viewModel.addTimeToCurrentStep(120) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                            ) {
+                                Text(
+                                    text = "+2m",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -645,7 +677,7 @@ fun RoutineCelebrationView(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Daily Streak",
+                            text = if ((userStats?.streakFreezesAvailable ?: 0) > 0) "Daily Streak (🧊 Protected)" else "Daily Streak",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

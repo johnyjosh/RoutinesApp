@@ -17,7 +17,7 @@ import com.excalibur.routines.data.local.entity.UserStatsEntity
         RoutineScheduleEntity::class,
         UserStatsEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class RoutinesDatabase : RoomDatabase() {

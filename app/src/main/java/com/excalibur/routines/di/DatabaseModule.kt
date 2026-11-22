@@ -43,6 +43,13 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `user_stats` ADD COLUMN `streakFreezesAvailable` INTEGER NOT NULL DEFAULT 1")
+            db.execSQL("ALTER TABLE `user_stats` ADD COLUMN `lastFreezeUsedDate` TEXT DEFAULT NULL")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideRoutinesDatabase(
@@ -53,7 +60,7 @@ object DatabaseModule {
             RoutinesDatabase::class.java,
             "routines.db"
         )
-            .addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
 

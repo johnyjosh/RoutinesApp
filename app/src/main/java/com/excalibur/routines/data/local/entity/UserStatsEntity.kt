@@ -11,5 +11,7 @@ data class UserStatsEntity(
     val currentStreak: Int = 0,
     val bestStreak: Int = 0,
     val lastCompletedDate: String? = null,
-    val routinesCompletedCount: Int = 0
+    val routinesCompletedCount: Int = 0,
+    val streakFreezesAvailable: Int = 1,
+    val lastFreezeUsedDate: String? = null
 )

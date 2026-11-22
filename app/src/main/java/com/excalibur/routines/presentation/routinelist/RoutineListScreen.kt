@@ -26,6 +26,9 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -33,10 +36,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,6 +51,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -67,6 +75,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,16 +84,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.excalibur.routines.domain.model.CompanionAvatar
+import com.excalibur.routines.domain.model.Routine
 import com.excalibur.routines.domain.model.RoutineSchedule
+import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
 import com.excalibur.routines.domain.model.UserStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +120,7 @@ fun RoutineListScreen(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
+    var editingRoutineId by remember { mutableStateOf<String?>(null) }
     var routineToDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var routineToPermanentlyDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var showStatsDialog by remember { mutableStateOf(false) }
@@ -184,10 +204,18 @@ fun RoutineListScreen(
                             }
                         } else {
                             items(uiState.routines, key = { it.routine.id }) { routineWithDetails ->
+                                val isEditing = editingRoutineId == routineWithDetails.routine.id
                                 RoutineCard(
                                     routineWithDetails = routineWithDetails,
+                                    userStats = uiState.userStats,
+                                    isEditing = isEditing,
+                                    onToggleEdit = {
+                                        editingRoutineId = if (isEditing) null else routineWithDetails.routine.id
+                                    },
+                                    onUpdateRoutine = { routine, steps ->
+                                        viewModel.updateRoutine(routine, steps)
+                                    },
                                     onStart = { onStartRoutine(routineWithDetails.routine.id) },
-                                    onEdit = { onEditRoutine(routineWithDetails.routine.id) },
                                     onDuplicate = {
                                         viewModel.duplicateRoutine(routineWithDetails)
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -314,8 +342,11 @@ fun RoutineListScreen(
 @Composable
 fun RoutineCard(
     routineWithDetails: RoutineWithDetails,
+    userStats: UserStats,
+    isEditing: Boolean,
+    onToggleEdit: () -> Unit,
+    onUpdateRoutine: (Routine, List<RoutineStep>) -> Unit,
     onStart: () -> Unit,
-    onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     onAddSchedule: () -> Unit,
@@ -323,7 +354,6 @@ fun RoutineCard(
     onToggleSchedule: (String, Boolean) -> Unit,
     onDeleteSchedule: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     var isCopying by remember { mutableStateOf(false) }
     val copyScale by animateFloatAsState(
         targetValue = if (isCopying) 1.35f else 1f,
@@ -338,13 +368,31 @@ fun RoutineCard(
         }
     }
 
+    // Dynamic Estimated Finish Time
+    val estimatedFinishTime = remember(routineWithDetails.totalDurationSeconds) {
+        val finishTime = LocalTime.now().plusSeconds(routineWithDetails.totalDurationSeconds.toLong())
+        finishTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+    }
+
+    // Editable state when inline editing is active
+    var editingName by remember(routineWithDetails.routine.id, isEditing) { mutableStateOf(routineWithDetails.routine.name) }
+    var editingIcon by remember(routineWithDetails.routine.id, isEditing) { mutableStateOf(routineWithDetails.routine.icon) }
+    var editingSteps by remember(routineWithDetails.routine.id, isEditing, routineWithDetails.steps) { mutableStateOf(routineWithDetails.steps) }
+    var expandedStepId by remember { mutableStateOf<String?>(null) }
+    var draggedStepIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    val itemHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            containerColor = if (isEditing)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
         )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -365,14 +413,14 @@ fun RoutineCard(
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = routineWithDetails.routine.icon, fontSize = 28.sp)
+                        Text(text = if (isEditing) editingIcon else routineWithDetails.routine.icon, fontSize = 28.sp)
                     }
 
                     Spacer(modifier = Modifier.width(14.dp))
 
                     Column {
                         Text(
-                            text = routineWithDetails.routine.name,
+                            text = if (isEditing) editingName else routineWithDetails.routine.name,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -394,9 +442,10 @@ fun RoutineCard(
                                 )
                             }
                             Text(
-                                text = "${routineWithDetails.steps.size} steps",
+                                text = "🏁 Finish ~$estimatedFinishTime",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
@@ -418,8 +467,13 @@ fun RoutineCard(
                                 .scale(copyScale)
                         )
                     }
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(20.dp))
+                    IconButton(onClick = onToggleEdit) {
+                        Icon(
+                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+                            contentDescription = if (isEditing) "Done" else "Edit",
+                            tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     IconButton(onClick = onDelete) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(20.dp))
@@ -427,7 +481,7 @@ fun RoutineCard(
                 }
             }
 
-            // Quick Run Button & Expand Steps Row
+            // Quick Run Button & Accordion Toggle Row
             Spacer(modifier = Modifier.height(14.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -446,18 +500,19 @@ fun RoutineCard(
 
                 Row(
                     modifier = Modifier
-                        .clickable { expanded = !expanded }
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onToggleEdit() }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (expanded) "Hide steps" else "Show steps",
+                        text = if (isEditing) "Close editor" else "${routineWithDetails.steps.size} steps • Edit",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                     Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (isEditing) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
@@ -465,41 +520,234 @@ fun RoutineCard(
                 }
             }
 
-            AnimatedVisibility(visible = expanded) {
+            // Inline Accordion Editor (Opens directly in-place without page jump)
+            AnimatedVisibility(visible = isEditing) {
                 Column(
-                    modifier = Modifier.padding(top = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    routineWithDetails.steps.forEachIndexed { index, step ->
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    // 1. Title Input
+                    OutlinedTextField(
+                        value = editingName,
+                        onValueChange = { newName ->
+                            editingName = newName
+                            onUpdateRoutine(
+                                routineWithDetails.routine.copy(name = newName, icon = editingIcon),
+                                editingSteps
+                            )
+                        },
+                        label = { Text("Routine Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+
+                    // 2. Companion Selector (Gamified with unlock levels)
+                    Column {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    MaterialTheme.colorScheme.surface,
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${index + 1}. ${step.name}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
+                                text = "Routine Companion",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = if (step.isForcefulAlarm) "🚨" else "🔔",
-                                    fontSize = 12.sp
-                                )
-                                Text(
-                                    text = step.formattedDuration,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Text(
+                                text = "Level ${userStats.level}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            UserStats.ALL_COMPANIONS.forEach { companion ->
+                                val isUnlocked = userStats.isAvatarUnlocked(companion)
+                                val isSelected = editingIcon == companion.emoji
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(50.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                isSelected -> MaterialTheme.colorScheme.primaryContainer
+                                                isUnlocked -> MaterialTheme.colorScheme.surface
+                                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            }
+                                        )
+                                        .clickable(enabled = isUnlocked) {
+                                            editingIcon = companion.emoji
+                                            onUpdateRoutine(
+                                                routineWithDetails.routine.copy(name = editingName, icon = companion.emoji),
+                                                editingSteps
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = companion.emoji,
+                                        fontSize = if (isSelected) 26.sp else 20.sp,
+                                        modifier = Modifier.graphicsLayer {
+                                            alpha = if (isUnlocked) 1f else 0.35f
+                                        }
+                                    )
+                                    if (!isUnlocked) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                            modifier = Modifier.align(Alignment.BottomEnd).padding(2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Lv${companion.requiredLevel}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.outline,
+                                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+
+                    // 3. Reorderable Step List with Floating Drag Handle
+                    Text(
+                        text = "Steps (${editingSteps.size}) • Drag ≡ to Reorder",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        editingSteps.forEachIndexed { index, step ->
+                            val isExpanded = expandedStepId == step.id
+                            val isBeingDragged = draggedStepIndex == index
+
+                            InlineStepAccordionItem(
+                                step = step,
+                                index = index,
+                                totalSteps = editingSteps.size,
+                                isExpanded = isExpanded,
+                                isBeingDragged = isBeingDragged,
+                                dragOffsetY = dragOffsetY,
+                                onToggleExpand = {
+                                    expandedStepId = if (isExpanded) null else step.id
+                                },
+                                onUpdateStep = { name, mins, isForceful ->
+                                    val updated = editingSteps.toMutableList()
+                                    updated[index] = step.copy(
+                                        name = name,
+                                        durationMinutes = mins,
+                                        isForcefulAlarm = isForceful
+                                    )
+                                    editingSteps = updated
+                                    onUpdateRoutine(
+                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                        updated
+                                    )
+                                },
+                                onDragStart = {
+                                    draggedStepIndex = index
+                                    dragOffsetY = 0f
+                                },
+                                onDrag = { deltaY ->
+                                    dragOffsetY += deltaY
+                                    val current = draggedStepIndex ?: return@InlineStepAccordionItem
+                                    if (dragOffsetY > itemHeightPx * 0.7f && current < editingSteps.size - 1) {
+                                        val updated = editingSteps.toMutableList()
+                                        val item = updated.removeAt(current)
+                                        updated.add(current + 1, item)
+                                        editingSteps = updated
+                                        draggedStepIndex = current + 1
+                                        dragOffsetY -= itemHeightPx
+                                        onUpdateRoutine(
+                                            routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                            updated
+                                        )
+                                    } else if (dragOffsetY < -itemHeightPx * 0.7f && current > 0) {
+                                        val updated = editingSteps.toMutableList()
+                                        val item = updated.removeAt(current)
+                                        updated.add(current - 1, item)
+                                        editingSteps = updated
+                                        draggedStepIndex = current - 1
+                                        dragOffsetY += itemHeightPx
+                                        onUpdateRoutine(
+                                            routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                            updated
+                                        )
+                                    }
+                                },
+                                onDragEnd = {
+                                    draggedStepIndex = null
+                                    dragOffsetY = 0f
+                                },
+                                onDelete = {
+                                    val updated = editingSteps.toMutableList()
+                                    updated.removeAt(index)
+                                    editingSteps = updated
+                                    onUpdateRoutine(
+                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                        updated
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    // 4. Add Step Button
+                    OutlinedButton(
+                        onClick = {
+                            val newStep = RoutineStep(
+                                id = UUID.randomUUID().toString(),
+                                routineId = routineWithDetails.routine.id,
+                                name = "New Step",
+                                orderIndex = editingSteps.size,
+                                durationMinutes = 5,
+                                durationSeconds = 0,
+                                isForcefulAlarm = false
+                            )
+                            val updated = editingSteps + newStep
+                            editingSteps = updated
+                            expandedStepId = newStep.id
+                            onUpdateRoutine(
+                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                updated
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add Step", fontWeight = FontWeight.Bold)
+                    }
+
+                    // 5. Done Editing Button
+                    Button(
+                        onClick = onToggleEdit,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Done Editing", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -544,6 +792,262 @@ fun RoutineCard(
                             onEdit = { onEditSchedule(schedule.id) },
                             onDelete = { onDeleteSchedule(schedule.id) }
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InlineStepAccordionItem(
+    step: RoutineStep,
+    index: Int,
+    totalSteps: Int,
+    isExpanded: Boolean,
+    isBeingDragged: Boolean,
+    dragOffsetY: Float,
+    onToggleExpand: () -> Unit,
+    onUpdateStep: (name: String, minutes: Int, isForceful: Boolean) -> Unit,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .zIndex(if (isBeingDragged) 10f else 1f)
+            .graphicsLayer {
+                if (isBeingDragged) {
+                    translationY = dragOffsetY
+                    scaleX = 1.03f
+                    scaleY = 1.03f
+                    shadowElevation = 16.dp.toPx()
+                }
+            }
+            .animateContentSize(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isExpanded)
+                MaterialTheme.colorScheme.surface
+            else
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // Summary row: Grab handle, step name, duration badge, expand chevron
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Continuous floating drag handle
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(36.dp)
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onDragStart()
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onDrag(dragAmount.y)
+                                    },
+                                    onDragEnd = onDragEnd,
+                                    onDragCancel = onDragEnd
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Drag to reorder",
+                            tint = if (isBeingDragged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "${index + 1}. ${step.name}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (step.isForcefulAlarm) "🚨" else "🔔",
+                        fontSize = 12.sp
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = step.formattedDuration,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+
+            // Expanded details: Step name field, duration steppers & presets, alarm toggle, delete button
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = step.name,
+                        onValueChange = { newName ->
+                            onUpdateStep(newName, step.durationMinutes, step.isForcefulAlarm)
+                        },
+                        label = { Text("Step Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    // Duration Stepper & Quick Presets
+                    Text(
+                        text = "Duration",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val newMins = (step.durationMinutes - 1).coerceAtLeast(1)
+                                    onUpdateStep(step.name, newMins, step.isForcefulAlarm)
+                                }
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "Decrease duration")
+                            }
+
+                            Text(
+                                text = "${step.durationMinutes} min",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            IconButton(
+                                onClick = {
+                                    val newMins = (step.durationMinutes + 1).coerceAtMost(180)
+                                    onUpdateStep(step.name, newMins, step.isForcefulAlarm)
+                                }
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Increase duration")
+                            }
+                        }
+
+                        // Presets
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        ) {
+                            listOf(1, 5, 10, 15, 20, 30).forEach { presetMins ->
+                                FilterChip(
+                                    selected = step.durationMinutes == presetMins,
+                                    onClick = {
+                                        onUpdateStep(step.name, presetMins, step.isForcefulAlarm)
+                                    },
+                                    label = { Text("${presetMins}m", fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Alarm vs Gentle Chime Toggle
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                onUpdateStep(step.name, step.durationMinutes, !step.isForcefulAlarm)
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(if (step.isForcefulAlarm) "🚨" else "🔔", fontSize = 18.sp)
+                            Column {
+                                Text(
+                                    text = if (step.isForcefulAlarm) "Forceful Alarm" else "Gentle Chime",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = if (step.isForcefulAlarm) "Rings continuously like an alarm clock" else "Single audio chime reminder",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = step.isForcefulAlarm,
+                            onCheckedChange = { isChecked ->
+                                onUpdateStep(step.name, step.durationMinutes, isChecked)
+                            }
+                        )
+                    }
+
+                    // Delete step button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = onDelete,
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Remove Step")
+                        }
                     }
                 }
             }
@@ -921,8 +1425,10 @@ fun UserGamificationCard(
                 .padding(16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
@@ -959,6 +1465,25 @@ fun UserGamificationCard(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🧊", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${userStats.streakFreezesAvailable} Freeze Available",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -1069,6 +1594,17 @@ fun StatsBreakdownDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
+                            Text("🧊 Streak Freezes", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${userStats.streakFreezesAvailable} available",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text("✅ Routines Completed", style = MaterialTheme.typography.bodyMedium)
                             Text(
                                 text = "${userStats.routinesCompletedCount}",
@@ -1079,7 +1615,7 @@ fun StatsBreakdownDialog(
                 }
 
                 Text(
-                    text = "How Points Work:",
+                    text = "How Points & Streaks Work:",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -1088,6 +1624,7 @@ fun StatsBreakdownDialog(
                             "• +50 pts for finishing early & visiting Bonus Lounge\n" +
                             "• +10-20 pts for catching treats & mini-games\n" +
                             "• +100 pts for completing an entire routine\n\n" +
+                            "🧊 Streak Freezes protect your streak if you miss a day! You earn 1 every 7 completions (up to 2).\n\n" +
                             "Complete at least one routine every day to keep your streak burning!",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

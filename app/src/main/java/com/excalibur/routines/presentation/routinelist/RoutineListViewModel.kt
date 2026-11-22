@@ -90,6 +90,15 @@ class RoutineListViewModel @Inject constructor(
         }
     }
 
+    fun updateRoutine(routine: Routine, steps: List<RoutineStep>) {
+        viewModelScope.launch {
+            val indexedSteps = steps.mapIndexed { index, step ->
+                step.copy(orderIndex = index)
+            }
+            saveRoutineUseCase(routine, indexedSteps)
+        }
+    }
+
     fun deleteSchedule(scheduleId: String) {
         viewModelScope.launch {
             deleteScheduleUseCase(scheduleId)

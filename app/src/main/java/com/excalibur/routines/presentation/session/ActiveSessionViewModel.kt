@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class ActiveSessionUiState(
@@ -53,6 +55,14 @@ data class ActiveSessionUiState(
             val mins = remainingSecondsInStep / 60
             val secs = remainingSecondsInStep % 60
             return "%02d:%02d".format(mins, secs)
+        }
+
+    val formattedEstimatedFinishTime: String
+        get() {
+            val remainingSecs = remainingSecondsInStep + steps.drop(currentStepIndex + 1).sumOf { it.totalSeconds }
+            val finishTime = LocalTime.now().plusSeconds(remainingSecs.toLong())
+            val formatter = DateTimeFormatter.ofPattern("h:mm a")
+            return finishTime.format(formatter)
         }
 }
 
@@ -110,6 +120,19 @@ class ActiveSessionViewModel @Inject constructor(
         }
     }
 
+    fun addTimeToCurrentStep(seconds: Int) {
+        if (seconds <= 0) return
+        _uiState.update { current ->
+            val newRemaining = current.remainingSecondsInStep + seconds
+            val newTotal = maxOf(current.totalSecondsInStep, newRemaining)
+            current.copy(
+                remainingSecondsInStep = newRemaining,
+                totalSecondsInStep = newTotal,
+                feedbackMessage = "+${seconds / 60}m extended ⏱️"
+            )
+        }
+    }
+
     fun clearFeedbackMessage() {
         _uiState.update { it.copy(feedbackMessage = null) }
     }
@@ -129,7 +152,20 @@ class ActiveSessionViewModel @Inject constructor(
                 val current = _uiState.value
                 if (!current.isPaused && !current.isFinished) {
                     if (current.remainingSecondsInStep > 1) {
-                        _uiState.update { it.copy(remainingSecondsInStep = it.remainingSecondsInStep - 1) }
+                        val nextRemaining = current.remainingSecondsInStep - 1
+                        _uiState.update { it.copy(remainingSecondsInStep = nextRemaining) }
+
+                        // Hands-free mid-step voice cues
+                        if (current.voiceCuesEnabled) {
+                            val total = current.totalSecondsInStep
+                            if (total >= 60 && nextRemaining == total / 2) {
+                                voiceAnnouncer.speak("Halfway through ${current.currentStep?.name ?: "this step"}")
+                            } else if (total >= 60 && nextRemaining == 30) {
+                                voiceAnnouncer.speak("30 seconds remaining")
+                            } else if (nextRemaining == 10) {
+                                voiceAnnouncer.speak("10 seconds")
+                            }
+                        }
                     } else {
                         // Step completed! Award points and advance
                         advanceToNextStep(earnedStepPoints = true)
