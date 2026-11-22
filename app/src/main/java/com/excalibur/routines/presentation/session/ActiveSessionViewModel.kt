@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.excalibur.routines.alarm.ActiveRoutineNotificationManager
 import com.excalibur.routines.alarm.AlarmSoundManager
 import com.excalibur.routines.alarm.VoiceAnnouncer
 import com.excalibur.routines.domain.model.Routine
@@ -72,7 +73,8 @@ class ActiveSessionViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
     private val userStatsRepository: UserStatsRepository,
     private val alarmSoundManager: AlarmSoundManager,
-    private val voiceAnnouncer: VoiceAnnouncer
+    private val voiceAnnouncer: VoiceAnnouncer,
+    private val activeRoutineNotificationManager: ActiveRoutineNotificationManager
 ) : ViewModel() {
 
     private val route: Screen.ActiveSession = savedStateHandle.toRoute()
@@ -155,6 +157,17 @@ class ActiveSessionViewModel @Inject constructor(
                         val nextRemaining = current.remainingSecondsInStep - 1
                         _uiState.update { it.copy(remainingSecondsInStep = nextRemaining) }
 
+                        val updated = _uiState.value
+                        activeRoutineNotificationManager.showOrUpdateNotification(
+                            routineName = updated.routine?.name ?: "Routine",
+                            stepName = updated.currentStep?.name ?: "Step",
+                            stepIndex = updated.currentStepIndex,
+                            totalSteps = updated.steps.size,
+                            formattedRemainingTime = updated.formattedRemainingTime,
+                            isPaused = updated.isPaused,
+                            isBonusLounge = updated.isBonusLounge
+                        )
+
                         // Hands-free mid-step voice cues
                         if (current.voiceCuesEnabled) {
                             val total = current.totalSecondsInStep
@@ -204,6 +217,7 @@ class ActiveSessionViewModel @Inject constructor(
         } else {
             // Entire routine finished! Award 100 completion points and record daily streak
             timerJob?.cancel()
+            activeRoutineNotificationManager.dismissNotification()
             viewModelScope.launch {
                 val updatedStats = userStatsRepository.recordRoutineCompletion(100)
                 _uiState.update {
@@ -228,9 +242,21 @@ class ActiveSessionViewModel @Inject constructor(
         val currentPoints = (_uiState.value.userStats?.totalPoints ?: 0) + 50
         val unlockedGames = MiniGameType.entries.filter { it.isUnlocked(currentPoints) }
         val chosenGame = unlockedGames.randomOrNull() ?: MiniGameType.BERRY_CATCH
-        _uiState.update { it.copy(isBonusLounge = true, activeGameType = chosenGame) }
+
+        // Cap the bonus gap to max 45 seconds so it is a quick gap break, not endless gaming
+        val currentRemaining = _uiState.value.remainingSecondsInStep
+        val cappedGapSeconds = minOf(currentRemaining, 45).coerceAtLeast(10)
+
+        _uiState.update {
+            it.copy(
+                isBonusLounge = true,
+                activeGameType = chosenGame,
+                remainingSecondsInStep = cappedGapSeconds,
+                totalSecondsInStep = cappedGapSeconds
+            )
+        }
         if (_uiState.value.voiceCuesEnabled) {
-            voiceAnnouncer.speak("You finished early! Enjoy your bonus time.")
+            voiceAnnouncer.speak("You finished early! 45-second bonus round.")
         }
     }
 
@@ -288,5 +314,6 @@ class ActiveSessionViewModel @Inject constructor(
         timerJob?.cancel()
         voiceAnnouncer.stop()
         alarmSoundManager.stopAlarm()
+        activeRoutineNotificationManager.dismissNotification()
     }
 }

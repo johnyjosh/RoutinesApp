@@ -17,12 +17,35 @@ class UserStatsRepositoryImpl @Inject constructor(
 
     override fun getUserStats(): Flow<UserStats> {
         return userStatsDao.getUserStats().map { entity ->
-            entity?.toDomain() ?: UserStats()
+            val existing = entity ?: UserStatsEntity()
+            // Weekly Streak Freeze replenishment: automatically restore to 1 if 7+ days have elapsed since last use
+            if (existing.streakFreezesAvailable == 0 && existing.lastFreezeUsedDate != null) {
+                try {
+                    val lastUsed = LocalDate.parse(existing.lastFreezeUsedDate)
+                    if (LocalDate.now().isAfter(lastUsed.plusDays(6))) {
+                        val refreshed = existing.copy(streakFreezesAvailable = 1)
+                        userStatsDao.upsertUserStats(refreshed)
+                        return@map refreshed.toDomain()
+                    }
+                } catch (_: Exception) {}
+            }
+            existing.toDomain()
         }
     }
 
     override suspend fun getUserStatsOnce(): UserStats {
-        return userStatsDao.getUserStatsOnce()?.toDomain() ?: UserStats()
+        val existing = userStatsDao.getUserStatsOnce() ?: UserStatsEntity()
+        if (existing.streakFreezesAvailable == 0 && existing.lastFreezeUsedDate != null) {
+            try {
+                val lastUsed = LocalDate.parse(existing.lastFreezeUsedDate)
+                if (LocalDate.now().isAfter(lastUsed.plusDays(6))) {
+                    val refreshed = existing.copy(streakFreezesAvailable = 1)
+                    userStatsDao.upsertUserStats(refreshed)
+                    return refreshed.toDomain()
+                }
+            } catch (_: Exception) {}
+        }
+        return existing.toDomain()
     }
 
     override suspend fun addPoints(amount: Int) {

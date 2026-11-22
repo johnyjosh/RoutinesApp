@@ -27,14 +27,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
@@ -52,6 +55,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -111,6 +115,7 @@ import com.excalibur.routines.domain.model.RoutineSchedule
 import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
 import com.excalibur.routines.domain.model.UserStats
+import com.excalibur.routines.presentation.session.MiniGameType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
@@ -136,6 +141,7 @@ fun RoutineListScreen(
     var routineToDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var routineToPermanentlyDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var showStatsDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -145,6 +151,15 @@ fun RoutineListScreen(
                         text = "Routines",
                         fontWeight = FontWeight.ExtraBold
                     )
+                },
+                actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Preferences",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             )
         },
@@ -208,65 +223,29 @@ fun RoutineListScreen(
                         // Type & Enter Quick Routine Creator
                         item(key = "quick_create_routine") {
                             var newRoutineName by remember { mutableStateOf("") }
-                            OutlinedTextField(
+                            CompactInlineInputField(
                                 value = newRoutineName,
                                 onValueChange = { newRoutineName = it },
-                                placeholder = {
-                                    Text(
-                                        text = "Create a routine (e.g. Evening Wind Down)...",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
+                                placeholder = "Create routine (e.g. Evening Wind Down)...",
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.Add,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 },
-                                trailingIcon = {
-                                    if (newRoutineName.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
-                                                val name = newRoutineName.trim()
-                                                if (name.isNotEmpty()) {
-                                                    viewModel.createQuickRoutine(name) { newId ->
-                                                        editingRoutineId = newId
-                                                    }
-                                                    newRoutineName = ""
-                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = "Create Routine",
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
+                                onSubmit = {
+                                    val name = newRoutineName.trim()
+                                    if (name.isNotEmpty()) {
+                                        viewModel.createQuickRoutine(name) { newId ->
+                                            editingRoutineId = newId
                                         }
+                                        newRoutineName = ""
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                 },
-                                keyboardOptions = KeyboardOptions(
-                                    imeAction = ImeAction.Done,
-                                    capitalization = KeyboardCapitalization.Sentences
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        val name = newRoutineName.trim()
-                                        if (name.isNotEmpty()) {
-                                            viewModel.createQuickRoutine(name) { newId ->
-                                                editingRoutineId = newId
-                                            }
-                                            newRoutineName = ""
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
-                                    }
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp)
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                             )
                         }
 
@@ -416,6 +395,79 @@ fun RoutineListScreen(
             userStats = uiState.userStats,
             onDismiss = { showStatsDialog = false }
         )
+    }
+
+    if (showSettingsDialog) {
+        GlobalSettingsDialog(
+            onDismiss = { showSettingsDialog = false }
+        )
+    }
+}
+
+@Composable
+fun CompactInlineInputField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    leadingIcon: @Composable () -> Unit,
+    onSubmit: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            leadingIcon()
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(modifier = Modifier.weight(1f)) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    singleLine = true,
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done,
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { onSubmit() }
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (value.isNotBlank()) {
+                IconButton(
+                    onClick = onSubmit,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Confirm",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -845,87 +897,39 @@ fun RoutineCard(
                             }
 
                             // Quick Add Step Placeholder
-                            OutlinedTextField(
+                            CompactInlineInputField(
                                 value = newStepInput,
                                 onValueChange = { newStepInput = it },
-                                placeholder = {
-                                    Text(
-                                        text = "Add a step (e.g. Drink water, Stretch)...",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
+                                placeholder = "Add step (e.g. Drink water, Stretch)...",
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.Add,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 },
-                                trailingIcon = {
-                                    if (newStepInput.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
-                                                val stepName = newStepInput.trim()
-                                                if (stepName.isNotEmpty()) {
-                                                    val newStep = RoutineStep(
-                                                        id = UUID.randomUUID().toString(),
-                                                        routineId = routineWithDetails.routine.id,
-                                                        name = stepName,
-                                                        orderIndex = editingSteps.size,
-                                                        durationMinutes = 5,
-                                                        durationSeconds = 0,
-                                                        isForcefulAlarm = true
-                                                    )
-                                                    val updated = editingSteps + newStep
-                                                    editingSteps = updated
-                                                    newStepInput = ""
-                                                    onUpdateRoutine(
-                                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                                        updated
-                                                    )
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = "Save Step",
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
+                                onSubmit = {
+                                    val stepName = newStepInput.trim()
+                                    if (stepName.isNotEmpty()) {
+                                        val newStep = RoutineStep(
+                                            id = UUID.randomUUID().toString(),
+                                            routineId = routineWithDetails.routine.id,
+                                            name = stepName,
+                                            orderIndex = editingSteps.size,
+                                            durationMinutes = 5,
+                                            durationSeconds = 0,
+                                            isForcefulAlarm = true
+                                        )
+                                        val updated = editingSteps + newStep
+                                        editingSteps = updated
+                                        newStepInput = ""
+                                        onUpdateRoutine(
+                                            routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                            updated
+                                        )
                                     }
-                                },
-                                keyboardOptions = KeyboardOptions(
-                                    imeAction = ImeAction.Done,
-                                    capitalization = KeyboardCapitalization.Sentences
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        val stepName = newStepInput.trim()
-                                        if (stepName.isNotEmpty()) {
-                                            val newStep = RoutineStep(
-                                                id = UUID.randomUUID().toString(),
-                                                routineId = routineWithDetails.routine.id,
-                                                name = stepName,
-                                                orderIndex = editingSteps.size,
-                                                durationMinutes = 5,
-                                                durationSeconds = 0,
-                                                isForcefulAlarm = true
-                                            )
-                                            val updated = editingSteps + newStep
-                                            editingSteps = updated
-                                            newStepInput = ""
-                                            onUpdateRoutine(
-                                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                                updated
-                                            )
-                                        }
-                                    }
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp)
+                                }
                             )
                         }
                     }
@@ -997,56 +1001,24 @@ fun RoutineCard(
 
                             // Inline Custom Time Input (Type & Enter)
                             var scheduleInputText by remember { mutableStateOf("") }
-                            OutlinedTextField(
+                            CompactInlineInputField(
                                 value = scheduleInputText,
                                 onValueChange = { scheduleInputText = it },
-                                placeholder = {
-                                    Text(
-                                        text = "Add custom alarm (e.g. 6:45 AM, 21:30)...",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                },
+                                placeholder = "Custom alarm (e.g. 6:45 AM, 21:30)...",
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.Schedule,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 },
-                                trailingIcon = {
-                                    if (scheduleInputText.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
-                                                parseTimeString(scheduleInputText.trim())?.let { (h, m) ->
-                                                    onAddScheduleInline(h, m)
-                                                    scheduleInputText = ""
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = "Save Schedule",
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
+                                onSubmit = {
+                                    parseTimeString(scheduleInputText.trim())?.let { (h, m) ->
+                                        onAddScheduleInline(h, m)
+                                        scheduleInputText = ""
                                     }
-                                },
-                                keyboardOptions = KeyboardOptions(
-                                    imeAction = ImeAction.Done
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        parseTimeString(scheduleInputText.trim())?.let { (h, m) ->
-                                            onAddScheduleInline(h, m)
-                                            scheduleInputText = ""
-                                        }
-                                    }
-                                ),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp)
+                                }
                             )
                         }
                     }
@@ -1233,12 +1205,29 @@ fun InlineStepAccordionItem(
                         singleLine = true
                     )
 
-                    // Duration Stepper & Quick Presets
-                    Text(
-                        text = "Duration",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    // Duration Stepper & Quick Presets & Compact Delete Icon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Duration",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Remove Step",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1287,21 +1276,6 @@ fun InlineStepAccordionItem(
                                     label = { Text("${presetMins}m", fontSize = 11.sp) }
                                 )
                             }
-                        }
-                    }
-
-                    // Delete step button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = onDelete,
-                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Remove Step")
                         }
                     }
                 }
@@ -1873,6 +1847,74 @@ fun StatsBreakdownDialog(
                     }
                 }
 
+                // Companion Progression Showcase
+                Text(
+                    text = "Companion Avatars (${userStats.levelTitle}):",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    UserStats.ALL_COMPANIONS.forEach { companion ->
+                        val unlocked = userStats.isAvatarUnlocked(companion)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (unlocked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = if (unlocked) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(companion.emoji, fontSize = 24.sp)
+                                Text(
+                                    text = if (unlocked) companion.name else "Lv ${companion.requiredLevel} 🔒",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (unlocked) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Mini-Game Unlocks Showcase
+                Text(
+                    text = "Bonus Lounge Mini-Games:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MiniGameType.entries.forEach { game ->
+                        val unlocked = game.isUnlocked(userStats.totalPoints)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (unlocked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = if (unlocked) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(game.icon, fontSize = 24.sp)
+                                Text(
+                                    text = if (unlocked) game.title else "${game.requiredPoints} pts 🔒",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (unlocked) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Text(
                     text = "How Points & Streaks Work:",
                     style = MaterialTheme.typography.labelLarge,
@@ -1893,6 +1935,94 @@ fun StatsBreakdownDialog(
         confirmButton = {
             Button(onClick = onDismiss) {
                 Text("Got it! 🚀")
+            }
+        }
+    )
+}
+
+@Composable
+fun GlobalSettingsDialog(
+    onDismiss: () -> Unit
+) {
+    var voiceCues by remember { mutableStateOf(true) }
+    var keepScreenAwake by remember { mutableStateOf(true) }
+    var soundAlerts by remember { mutableStateOf(true) }
+    var vibration by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("⚙️", fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("App Preferences", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("🔊 Voice Cues", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Spoken step & halfway announcements", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            Switch(checked = voiceCues, onCheckedChange = { voiceCues = it })
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("💡 Keep Screen Awake", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Prevents screen timeout during active routines", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            Switch(checked = keepScreenAwake, onCheckedChange = { keepScreenAwake = it })
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("🔔 Alarm Sounds", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Plays transition alarm at end of steps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            Switch(checked = soundAlerts, onCheckedChange = { soundAlerts = it })
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("📳 Haptic Vibration", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Text("Vibrate device on alarms and key actions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                            }
+                            Switch(checked = vibration, onCheckedChange = { vibration = it })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
+                Text("Done")
             }
         }
     )
