@@ -75,7 +75,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.UserStats
 import com.excalibur.routines.presentation.session.minigames.BerryCatchGame
+import com.excalibur.routines.presentation.session.minigames.ChromaEchoGame
+import com.excalibur.routines.presentation.session.minigames.CritterPopGame
 import com.excalibur.routines.presentation.session.minigames.MemoryMatchGame
+import com.excalibur.routines.presentation.session.minigames.TowerStackGame
 import com.excalibur.routines.presentation.session.minigames.ZenBloomGame
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -869,6 +872,9 @@ fun BonusLoungeView(
                             MiniGameType.BERRY_CATCH -> "Berry Catch 🫐"
                             MiniGameType.MEMORY_MATCH -> "Brain Spark 🧠"
                             MiniGameType.ZEN_BLOOM -> "Zen Bloom 🌸"
+                            MiniGameType.CRITTER_POP -> "Critter Pop 🐾"
+                            MiniGameType.TOWER_STACK -> "Tower Stack 🧱"
+                            MiniGameType.CHROMA_ECHO -> "Chroma Echo 🎨"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
@@ -891,6 +897,15 @@ fun BonusLoungeView(
                         onScoreEarned = onScoreEarned
                     )
                     MiniGameType.ZEN_BLOOM -> ZenBloomGame(
+                        onScoreEarned = onScoreEarned
+                    )
+                    MiniGameType.CRITTER_POP -> CritterPopGame(
+                        onScoreEarned = onScoreEarned
+                    )
+                    MiniGameType.TOWER_STACK -> TowerStackGame(
+                        onScoreEarned = onScoreEarned
+                    )
+                    MiniGameType.CHROMA_ECHO -> ChromaEchoGame(
                         onScoreEarned = onScoreEarned
                     )
                 }
