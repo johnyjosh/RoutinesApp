@@ -2,6 +2,8 @@ package com.excalibur.routines.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.excalibur.routines.data.local.RoutinesDatabase
 import com.excalibur.routines.data.local.dao.RoutineDao
 import com.excalibur.routines.data.local.dao.ScheduleDao
@@ -24,6 +26,23 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `user_stats` (
+                    `id` INTEGER NOT NULL PRIMARY KEY,
+                    `totalPoints` INTEGER NOT NULL,
+                    `currentStreak` INTEGER NOT NULL,
+                    `bestStreak` INTEGER NOT NULL,
+                    `lastCompletedDate` TEXT,
+                    `routinesCompletedCount` INTEGER NOT NULL
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
     @Provides
     @Singleton
     fun provideRoutinesDatabase(
@@ -33,7 +52,9 @@ object DatabaseModule {
             context,
             RoutinesDatabase::class.java,
             "routines.db"
-        ).fallbackToDestructiveMigration().build()
+        )
+            .addMigrations(MIGRATION_3_4)
+            .build()
     }
 
     @Provides
