@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
+        android:name=".RoutinesApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -38,7 +39,7 @@
         </activity>
         
         <activity
-            android:name=".services.AlarmActivity"
+            android:name=".alarm.AlarmActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTop"
@@ -46,32 +47,27 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.Routines">
         </activity>
+
         <receiver
-            android:name=".services.AlarmReceiver"
-            android:enabled="true"
-            android:exported="false">  <!-- Set exported to false if only your app triggers it -->
-        </receiver>
-        
-        <receiver
-            android:name=".services.AlarmDismissReceiver"
+            android:name=".alarm.AlarmReceiver"
             android:enabled="true"
             android:exported="false">
         </receiver>
         
         <receiver
-            android:name=".services.BootReceiver"
+            android:name=".alarm.BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.PACKAGE_REPLACED" />
-                <data android:scheme="package" />
             </intent-filter>
         </receiver>
 
         <service
-            android:name=".services.AlarmService"
+            android:name=".alarm.AlarmService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">
