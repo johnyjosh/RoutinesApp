@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -42,6 +45,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -135,6 +140,7 @@ fun ActiveSessionScreen(
             snackbarHostState = snackbarHostState,
             onExit = { showExitDialog = true },
             onSwitchGame = viewModel::switchGame,
+            onSelectGame = viewModel::selectGame,
             onNextStep = viewModel::exitBonusLoungeAndAdvance,
             onToggleVoiceCues = viewModel::toggleVoiceCues,
             onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
@@ -741,6 +747,7 @@ fun BonusLoungeView(
     snackbarHostState: SnackbarHostState,
     onExit: () -> Unit,
     onSwitchGame: () -> Unit,
+    onSelectGame: (MiniGameType) -> Unit,
     onNextStep: () -> Unit,
     onToggleVoiceCues: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
@@ -850,35 +857,43 @@ fun BonusLoungeView(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            val userPoints = uiState.userStats?.totalPoints ?: 0
+            val isGameUnlocked = uiState.activeGameType.isUnlocked(userPoints)
+
+            // Mini-game Selector Row with lock indicators
+            LazyRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Finished early! Earn bonus points ✨",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = when (uiState.activeGameType) {
-                            MiniGameType.BERRY_CATCH -> "Berry Catch 🫐"
-                            MiniGameType.MEMORY_MATCH -> "Brain Spark 🧠"
-                            MiniGameType.ZEN_BLOOM -> "Zen Bloom 🌸"
-                            MiniGameType.CRITTER_POP -> "Critter Pop 🐾"
-                            MiniGameType.TOWER_STACK -> "Tower Stack 🧱"
-                            MiniGameType.CHROMA_ECHO -> "Chroma Echo 🎨"
+                items(MiniGameType.entries) { game ->
+                    val unlocked = game.isUnlocked(userPoints)
+                    val isSelected = uiState.activeGameType == game
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onSelectGame(game) },
+                        leadingIcon = {
+                            if (!unlocked) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Locked",
+                                    modifier = Modifier.size(13.dp),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        label = {
+                            Text(
+                                text = "${game.icon} ${game.title}",
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     )
                 }
             }
@@ -886,27 +901,36 @@ fun BonusLoungeView(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                when (uiState.activeGameType) {
-                    MiniGameType.BERRY_CATCH -> BerryCatchGame(
-                        companionIcon = uiState.routine?.icon ?: "🦊",
-                        onScoreEarned = onScoreEarned
-                    )
-                    MiniGameType.MEMORY_MATCH -> MemoryMatchGame(
-                        onScoreEarned = onScoreEarned
-                    )
-                    MiniGameType.ZEN_BLOOM -> ZenBloomGame(
-                        onScoreEarned = onScoreEarned
-                    )
-                    MiniGameType.CRITTER_POP -> CritterPopGame(
-                        onScoreEarned = onScoreEarned
-                    )
-                    MiniGameType.TOWER_STACK -> TowerStackGame(
-                        onScoreEarned = onScoreEarned
-                    )
-                    MiniGameType.CHROMA_ECHO -> ChromaEchoGame(
-                        onScoreEarned = onScoreEarned
+                if (isGameUnlocked) {
+                    when (uiState.activeGameType) {
+                        MiniGameType.BERRY_CATCH -> BerryCatchGame(
+                            companionIcon = uiState.routine?.icon ?: "🦊",
+                            onScoreEarned = onScoreEarned
+                        )
+                        MiniGameType.MEMORY_MATCH -> MemoryMatchGame(
+                            onScoreEarned = onScoreEarned
+                        )
+                        MiniGameType.ZEN_BLOOM -> ZenBloomGame(
+                            onScoreEarned = onScoreEarned
+                        )
+                        MiniGameType.CRITTER_POP -> CritterPopGame(
+                            onScoreEarned = onScoreEarned
+                        )
+                        MiniGameType.TOWER_STACK -> TowerStackGame(
+                            onScoreEarned = onScoreEarned
+                        )
+                        MiniGameType.CHROMA_ECHO -> ChromaEchoGame(
+                            onScoreEarned = onScoreEarned
+                        )
+                    }
+                } else {
+                    LockedGameCard(
+                        game = uiState.activeGameType,
+                        userPoints = userPoints,
+                        onPlayUnlockedGame = onSwitchGame
                     )
                 }
             }
@@ -941,6 +965,122 @@ fun BonusLoungeView(
                 ) {
                     Text("Next Step ⏭️", fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LockedGameCard(
+    game: MiniGameType,
+    userPoints: Int,
+    onPlayUnlockedGame: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                contentAlignment = Alignment.BottomEnd,
+                modifier = Modifier.size(80.dp)
+            ) {
+                Text(
+                    text = game.icon,
+                    fontSize = 54.sp,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = game.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = game.subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+            ) {
+                Text(
+                    text = "🔒 Unlocks at Level ${game.requiredLevel} (${game.requiredPoints} pts)",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val progress = if (game.requiredPoints > 0) {
+                (userPoints.toFloat() / game.requiredPoints.toFloat()).coerceIn(0f, 1f)
+            } else 1f
+
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                strokeCap = StrokeCap.Round
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val pointsNeeded = (game.requiredPoints - userPoints).coerceAtLeast(0)
+            Text(
+                text = "$userPoints / ${game.requiredPoints} pts ($pointsNeeded more pts to unlock)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = onPlayUnlockedGame,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Play Unlocked Game 🎲")
             }
         }
     }

@@ -224,9 +224,11 @@ class ActiveSessionViewModel @Inject constructor(
     }
 
     fun enterBonusLounge() {
-        val randomGame = MiniGameType.entries.random()
         addSessionPoints(50, "Early Bird Bonus! ⚡")
-        _uiState.update { it.copy(isBonusLounge = true, activeGameType = randomGame) }
+        val currentPoints = (_uiState.value.userStats?.totalPoints ?: 0) + 50
+        val unlockedGames = MiniGameType.entries.filter { it.isUnlocked(currentPoints) }
+        val chosenGame = unlockedGames.randomOrNull() ?: MiniGameType.BERRY_CATCH
+        _uiState.update { it.copy(isBonusLounge = true, activeGameType = chosenGame) }
         if (_uiState.value.voiceCuesEnabled) {
             voiceAnnouncer.speak("You finished early! Enjoy your bonus time.")
         }
@@ -234,10 +236,17 @@ class ActiveSessionViewModel @Inject constructor(
 
     fun switchGame() {
         _uiState.update { current ->
-            val currentIndex = MiniGameType.entries.indexOf(current.activeGameType)
-            val nextIndex = (currentIndex + 1) % MiniGameType.entries.size
-            current.copy(activeGameType = MiniGameType.entries[nextIndex])
+            val userPoints = current.userStats?.totalPoints ?: 0
+            val unlockedGames = MiniGameType.entries.filter { it.isUnlocked(userPoints) }
+            if (unlockedGames.isEmpty()) return@update current
+            val currentIndex = unlockedGames.indexOf(current.activeGameType)
+            val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % unlockedGames.size
+            current.copy(activeGameType = unlockedGames[nextIndex])
         }
+    }
+
+    fun selectGame(game: MiniGameType) {
+        _uiState.update { it.copy(activeGameType = game) }
     }
 
     fun exitBonusLoungeAndAdvance() {
