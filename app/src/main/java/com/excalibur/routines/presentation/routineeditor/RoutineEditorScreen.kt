@@ -1,6 +1,6 @@
 package com.excalibur.routines.presentation.routineeditor
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.excalibur.routines.domain.model.RoutineStep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +59,7 @@ fun RoutineEditorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddStepDialog by remember { mutableStateOf(false) }
+    var editingStep by remember { mutableStateOf<RoutineStep?>(null) }
 
     Scaffold(
         topBar = {
@@ -174,7 +177,9 @@ fun RoutineEditorScreen(
             } else {
                 itemsIndexed(uiState.steps, key = { _, step -> step.id }) { index, step ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { editingStep = step },
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
@@ -199,6 +204,9 @@ fun RoutineEditorScreen(
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { editingStep = step }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit Step")
+                                }
                                 IconButton(
                                     onClick = { viewModel.moveStep(index, index - 1) },
                                     enabled = index > 0
@@ -227,7 +235,8 @@ fun RoutineEditorScreen(
     }
 
     if (showAddStepDialog) {
-        AddStepDialog(
+        StepEditorDialog(
+            initialStep = null,
             onDismiss = { showAddStepDialog = false },
             onConfirm = { name, mins, secs ->
                 viewModel.addStep(name, mins, secs)
@@ -235,20 +244,38 @@ fun RoutineEditorScreen(
             }
         )
     }
+
+    editingStep?.let { step ->
+        StepEditorDialog(
+            initialStep = step,
+            onDismiss = { editingStep = null },
+            onConfirm = { name, mins, secs ->
+                viewModel.updateStep(step.id, name, mins, secs)
+                editingStep = null
+            }
+        )
+    }
 }
 
 @Composable
-fun AddStepDialog(
+fun StepEditorDialog(
+    initialStep: RoutineStep? = null,
     onDismiss: () -> Unit,
     onConfirm: (name: String, minutes: Int, seconds: Int) -> Unit
 ) {
-    var stepName by remember { mutableStateOf("") }
-    var minutesText by remember { mutableStateOf("10") }
-    var secondsText by remember { mutableStateOf("0") }
+    var stepName by remember(initialStep) { mutableStateOf(initialStep?.name ?: "") }
+    var minutesText by remember(initialStep) {
+        mutableStateOf(initialStep?.durationMinutes?.toString() ?: "10")
+    }
+    var secondsText by remember(initialStep) {
+        mutableStateOf(initialStep?.durationSeconds?.toString() ?: "0")
+    }
+
+    val isEditing = initialStep != null
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Routine Step") },
+        title = { Text(if (isEditing) "Edit Step" else "Add Routine Step") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -298,7 +325,7 @@ fun AddStepDialog(
                 },
                 enabled = (minutesText.toIntOrNull() ?: 0) > 0 || (secondsText.toIntOrNull() ?: 0) > 0
             ) {
-                Text("Add")
+                Text(if (isEditing) "Save" else "Add")
             }
         },
         dismissButton = {

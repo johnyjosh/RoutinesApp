@@ -79,6 +79,23 @@ class RoutineEditorViewModel @Inject constructor(
         }
     }
 
+    fun updateStep(stepId: String, name: String, minutes: Int, seconds: Int) {
+        _uiState.update { current ->
+            val updated = current.steps.map { step ->
+                if (step.id == stepId) {
+                    step.copy(
+                        name = name.ifBlank { step.name },
+                        durationMinutes = minutes,
+                        durationSeconds = seconds
+                    )
+                } else {
+                    step
+                }
+            }
+            current.copy(steps = updated)
+        }
+    }
+
     fun removeStep(stepId: String) {
         _uiState.update { current ->
             val updated = current.steps.filterNot { it.id == stepId }
