@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.excalibur.routines.alarm.AlarmSoundManager
+import com.excalibur.routines.alarm.VoiceAnnouncer
 import com.excalibur.routines.domain.model.Routine
 import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.repository.RoutineRepository
@@ -27,7 +28,8 @@ data class ActiveSessionUiState(
     val totalSecondsInStep: Int = 0,
     val isPaused: Boolean = false,
     val isFinished: Boolean = false,
-    val keepScreenOn: Boolean = true
+    val keepScreenOn: Boolean = true,
+    val voiceCuesEnabled: Boolean = true
 ) {
     val currentStep: RoutineStep?
         get() = steps.getOrNull(currentStepIndex)
@@ -51,7 +53,8 @@ data class ActiveSessionUiState(
 class ActiveSessionViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val routineRepository: RoutineRepository,
-    private val alarmSoundManager: AlarmSoundManager
+    private val alarmSoundManager: AlarmSoundManager,
+    private val voiceAnnouncer: VoiceAnnouncer
 ) : ViewModel() {
 
     private val route: Screen.ActiveSession = savedStateHandle.toRoute()
@@ -74,9 +77,17 @@ class ActiveSessionViewModel @Inject constructor(
                         totalSecondsInStep = firstStep.totalSeconds
                     )
                 }
+                announceStep(firstStep, isFirst = true)
                 startTimer()
             }
         }
+    }
+
+    private fun announceStep(step: RoutineStep, isFirst: Boolean = false) {
+        if (!_uiState.value.voiceCuesEnabled) return
+        val prefix = if (isFirst) "Starting" else "Next step"
+        val durationStr = if (step.durationMinutes > 0) "${step.durationMinutes} minutes" else "${step.totalSeconds} seconds"
+        voiceAnnouncer.speak("$prefix: ${step.name}, $durationStr")
     }
 
     private fun startTimer() {
@@ -117,9 +128,13 @@ class ActiveSessionViewModel @Inject constructor(
                     totalSecondsInStep = nextStep.totalSeconds
                 )
             }
+            announceStep(nextStep, isFirst = false)
         } else {
             // Entire routine finished!
             _uiState.update { it.copy(isFinished = true, remainingSecondsInStep = 0) }
+            if (current.voiceCuesEnabled) {
+                voiceAnnouncer.speak("Routine complete! Great job!")
+            }
             timerJob?.cancel()
         }
     }
@@ -136,9 +151,20 @@ class ActiveSessionViewModel @Inject constructor(
         _uiState.update { it.copy(keepScreenOn = !it.keepScreenOn) }
     }
 
+    fun toggleVoiceCues() {
+        _uiState.update { current ->
+            val next = !current.voiceCuesEnabled
+            if (!next) {
+                voiceAnnouncer.stop()
+            }
+            current.copy(voiceCuesEnabled = next)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        voiceAnnouncer.stop()
         alarmSoundManager.stopAlarm()
     }
 }

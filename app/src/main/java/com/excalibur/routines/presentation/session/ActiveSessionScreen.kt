@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Pause
@@ -110,6 +112,13 @@ fun ActiveSessionScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::toggleVoiceCues) {
+                        Icon(
+                            imageVector = if (uiState.voiceCuesEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = if (uiState.voiceCuesEnabled) "Mute Voice Cues" else "Enable Voice Cues",
+                            tint = if (uiState.voiceCuesEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline
+                        )
+                    }
                     IconButton(onClick = viewModel::toggleKeepScreenOn) {
                         Icon(
                             imageVector = Icons.Default.Lightbulb,

@@ -1,7 +1,6 @@
 package com.excalibur.routines.ui.theme
 
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -55,7 +54,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun RoutinesTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Default to classy, power-efficient obsidian dark theme
     dynamicColor: Boolean = false, // Set default to false to showcase our custom vibrant theme!
     content: @Composable () -> Unit
 ) {

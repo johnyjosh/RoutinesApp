@@ -72,28 +72,28 @@ class RoutineEditorViewModel @Inject constructor(
         _uiState.update { it.copy(icon = icon) }
     }
 
-    fun addStep(name: String, minutes: Int, seconds: Int, isForcefulAlarm: Boolean) {
+    fun addStep(name: String, minutes: Int, isForcefulAlarm: Boolean) {
         _uiState.update { current ->
             val newStep = RoutineStep(
                 routineId = current.routineId,
                 name = name.ifBlank { "Step ${current.steps.size + 1}" },
                 orderIndex = current.steps.size,
-                durationMinutes = minutes,
-                durationSeconds = seconds,
+                durationMinutes = minutes.coerceAtLeast(1),
+                durationSeconds = 0,
                 isForcefulAlarm = isForcefulAlarm
             )
             current.copy(steps = current.steps + newStep)
         }
     }
 
-    fun updateStep(stepId: String, name: String, minutes: Int, seconds: Int, isForcefulAlarm: Boolean) {
+    fun updateStep(stepId: String, name: String, minutes: Int, isForcefulAlarm: Boolean) {
         _uiState.update { current ->
             val updated = current.steps.map { step ->
                 if (step.id == stepId) {
                     step.copy(
                         name = name.ifBlank { step.name },
-                        durationMinutes = minutes,
-                        durationSeconds = seconds,
+                        durationMinutes = minutes.coerceAtLeast(1),
+                        durationSeconds = 0,
                         isForcefulAlarm = isForcefulAlarm
                     )
                 } else {

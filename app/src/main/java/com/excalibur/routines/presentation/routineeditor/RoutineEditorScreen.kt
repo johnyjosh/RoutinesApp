@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,12 +31,14 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +58,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -331,8 +336,8 @@ fun RoutineEditorScreen(
         StepEditorDialog(
             initialStep = null,
             onDismiss = { showAddStepDialog = false },
-            onConfirm = { name, mins, secs, isForceful ->
-                viewModel.addStep(name, mins, secs, isForceful)
+            onConfirm = { name, mins, isForceful ->
+                viewModel.addStep(name, mins, isForceful)
                 showAddStepDialog = false
             }
         )
@@ -342,8 +347,8 @@ fun RoutineEditorScreen(
         StepEditorDialog(
             initialStep = step,
             onDismiss = { editingStep = null },
-            onConfirm = { name, mins, secs, isForceful ->
-                viewModel.updateStep(step.id, name, mins, secs, isForceful)
+            onConfirm = { name, mins, isForceful ->
+                viewModel.updateStep(step.id, name, mins, isForceful)
                 editingStep = null
             }
         )
@@ -354,18 +359,16 @@ fun RoutineEditorScreen(
 fun StepEditorDialog(
     initialStep: RoutineStep? = null,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, minutes: Int, seconds: Int, isForceful: Boolean) -> Unit
+    onConfirm: (name: String, minutes: Int, isForceful: Boolean) -> Unit
 ) {
     var stepName by remember(initialStep) { mutableStateOf(initialStep?.name ?: "") }
-    var minutesText by remember(initialStep) {
-        mutableStateOf(initialStep?.durationMinutes?.toString() ?: "10")
-    }
-    var secondsText by remember(initialStep) {
-        mutableStateOf(initialStep?.durationSeconds?.toString() ?: "0")
+    var minutes by remember(initialStep) {
+        mutableStateOf(initialStep?.durationMinutes?.coerceAtLeast(1) ?: 10)
     }
     var isForceful by remember(initialStep) {
         mutableStateOf(initialStep?.isForcefulAlarm ?: true)
     }
+    val haptic = LocalHapticFeedback.current
 
     val isEditing = initialStep != null
 
@@ -384,29 +387,105 @@ fun StepEditorDialog(
                     singleLine = true
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedTextField(
-                        value = minutesText,
-                        onValueChange = { minutesText = it.filter { char -> char.isDigit() } },
-                        label = { Text("Minutes") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
+                // Duration Stepper Header
+                Text(
+                    text = "Duration",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
 
-                    OutlinedTextField(
-                        value = secondsText,
-                        onValueChange = { secondsText = it.filter { char -> char.isDigit() } },
-                        label = { Text("Seconds") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
+                // Tactile Stepper Control
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                minutes = (minutes - 5).coerceAtLeast(1)
+                            },
+                            enabled = minutes > 5,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Text("-5", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                minutes = (minutes - 1).coerceAtLeast(1)
+                            },
+                            enabled = minutes > 1,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease 1 minute", modifier = Modifier.size(18.dp))
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                text = "${minutes} min",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                minutes = (minutes + 1).coerceAtMost(360)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Increase 1 minute", modifier = Modifier.size(18.dp))
+                        }
+
+                        FilledTonalIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                minutes = (minutes + 5).coerceAtMost(360)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Text("+5", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+
+                // Quick Preset Chips (1-tap selection)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    listOf(1, 5, 10, 15, 20, 25, 30, 45, 60).forEach { presetMins ->
+                        FilterChip(
+                            selected = minutes == presetMins,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                minutes = presetMins
+                            },
+                            label = {
+                                Text(
+                                    "${presetMins}m",
+                                    fontWeight = if (minutes == presetMins) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
                 }
 
                 // Alert Style Choice: Forceful Alarm vs Quick Chime
@@ -438,13 +517,11 @@ fun StepEditorDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val mins = minutesText.toIntOrNull() ?: 0
-                    val secs = secondsText.toIntOrNull() ?: 0
-                    if (mins > 0 || secs > 0) {
-                        onConfirm(stepName, mins, secs, isForceful)
+                    if (minutes > 0) {
+                        onConfirm(stepName, minutes, isForceful)
                     }
                 },
-                enabled = (minutesText.toIntOrNull() ?: 0) > 0 || (secondsText.toIntOrNull() ?: 0) > 0
+                enabled = minutes > 0
             ) {
                 Text(if (isEditing) "Save" else "Add")
             }
