@@ -3,6 +3,7 @@ package com.excalibur.routines.presentation.routinelist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.excalibur.routines.domain.model.Routine
+import com.excalibur.routines.domain.model.RoutineSchedule
 import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
 import com.excalibur.routines.domain.model.UserStats
@@ -13,6 +14,7 @@ import com.excalibur.routines.domain.usecase.DeleteScheduleUseCase
 import com.excalibur.routines.domain.usecase.GetRoutinesUseCase
 import com.excalibur.routines.domain.usecase.RestoreRoutineUseCase
 import com.excalibur.routines.domain.usecase.SaveRoutineUseCase
+import com.excalibur.routines.domain.usecase.SaveScheduleUseCase
 import com.excalibur.routines.domain.usecase.ToggleScheduleUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.util.UUID
 import javax.inject.Inject
 
@@ -36,6 +39,7 @@ class RoutineListViewModel @Inject constructor(
     private val routineRepository: RoutineRepository,
     private val userStatsRepository: UserStatsRepository,
     private val saveRoutineUseCase: SaveRoutineUseCase,
+    private val saveScheduleUseCase: SaveScheduleUseCase,
     private val deleteRoutineUseCase: DeleteRoutineUseCase,
     private val restoreRoutineUseCase: RestoreRoutineUseCase,
     private val toggleScheduleUseCase: ToggleScheduleUseCase,
@@ -138,10 +142,56 @@ class RoutineListViewModel @Inject constructor(
                     orderIndex = index,
                     durationMinutes = mins,
                     durationSeconds = 0,
-                    isForcefulAlarm = (index == 0) // First step forceful alarm, subsequent steps chime
+                    isForcefulAlarm = true
                 )
             }
             saveRoutineUseCase(routine, stepList)
+        }
+    }
+
+    fun createQuickRoutine(name: String, icon: String = "🦊", onCreated: (String) -> Unit = {}) {
+        val routineId = UUID.randomUUID().toString()
+        viewModelScope.launch {
+            val routine = Routine(
+                id = routineId,
+                name = name,
+                icon = icon
+            )
+            val defaultStep = RoutineStep(
+                id = UUID.randomUUID().toString(),
+                routineId = routineId,
+                name = "Step 1",
+                orderIndex = 0,
+                durationMinutes = 5,
+                durationSeconds = 0,
+                isForcefulAlarm = true
+            )
+            saveRoutineUseCase(routine, listOf(defaultStep))
+            onCreated(routineId)
+        }
+    }
+
+    fun addQuickSchedule(
+        routineId: String,
+        hour: Int,
+        minute: Int,
+        days: Set<DayOfWeek> = setOf(
+            DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+            DayOfWeek.THURSDAY, DayOfWeek.FRIDAY
+        ),
+        label: String = "Alarm"
+    ) {
+        viewModelScope.launch {
+            val schedule = RoutineSchedule(
+                id = UUID.randomUUID().toString(),
+                routineId = routineId,
+                label = label,
+                startHour = hour,
+                startMinute = minute,
+                daysOfWeek = days,
+                isEnabled = true
+            )
+            saveScheduleUseCase(schedule)
         }
     }
 }

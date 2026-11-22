@@ -205,6 +205,71 @@ fun RoutineListScreen(
                             )
                         }
 
+                        // Type & Enter Quick Routine Creator
+                        item(key = "quick_create_routine") {
+                            var newRoutineName by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = newRoutineName,
+                                onValueChange = { newRoutineName = it },
+                                placeholder = {
+                                    Text(
+                                        text = "Create a routine (e.g. Evening Wind Down)...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (newRoutineName.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                val name = newRoutineName.trim()
+                                                if (name.isNotEmpty()) {
+                                                    viewModel.createQuickRoutine(name) { newId ->
+                                                        editingRoutineId = newId
+                                                    }
+                                                    newRoutineName = ""
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Create Routine",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                    capitalization = KeyboardCapitalization.Sentences
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        val name = newRoutineName.trim()
+                                        if (name.isNotEmpty()) {
+                                            viewModel.createQuickRoutine(name) { newId ->
+                                                editingRoutineId = newId
+                                            }
+                                            newRoutineName = ""
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                    }
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                        }
+
                         if (uiState.routines.isEmpty()) {
                             item {
                                 EmptyRoutinesState(
@@ -242,6 +307,9 @@ fun RoutineListScreen(
                                     },
                                     onDelete = { routineToDelete = routineWithDetails },
                                     onAddSchedule = { onAddSchedule(routineWithDetails.routine.id) },
+                                    onAddScheduleInline = { hour, minute ->
+                                        viewModel.addQuickSchedule(routineWithDetails.routine.id, hour, minute)
+                                    },
                                     onEditSchedule = { scheduleId ->
                                         onEditSchedule(routineWithDetails.routine.id, scheduleId)
                                     },
@@ -351,6 +419,46 @@ fun RoutineListScreen(
     }
 }
 
+fun parseTimeString(input: String): Pair<Int, Int>? {
+    val clean = input.trim().lowercase()
+    if (clean.isEmpty()) return null
+    return try {
+        val isPm = clean.endsWith("pm") || clean.endsWith("p")
+        val isAm = clean.endsWith("am") || clean.endsWith("a")
+        val digitsPart = clean.replace("[a-z\\s]".toRegex(), "")
+        val parts = digitsPart.split(":")
+        val rawHour: Int
+        val rawMinute: Int
+        if (parts.size >= 2) {
+            rawHour = parts[0].toIntOrNull() ?: return null
+            rawMinute = parts[1].toIntOrNull() ?: return null
+        } else if (parts.size == 1 && digitsPart.length in 1..4) {
+            if (digitsPart.length <= 2) {
+                rawHour = digitsPart.toIntOrNull() ?: return null
+                rawMinute = 0
+            } else {
+                val hourLen = if (digitsPart.length == 3) 1 else 2
+                rawHour = digitsPart.substring(0, hourLen).toIntOrNull() ?: return null
+                rawMinute = digitsPart.substring(hourLen).toIntOrNull() ?: return null
+            }
+        } else {
+            return null
+        }
+        val hour = when {
+            isPm && rawHour < 12 -> rawHour + 12
+            isAm && rawHour == 12 -> 0
+            else -> rawHour
+        }
+        if (hour in 0..23 && rawMinute in 0..59) {
+            Pair(hour, rawMinute)
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @Composable
 fun RoutineCard(
     routineWithDetails: RoutineWithDetails,
@@ -362,6 +470,7 @@ fun RoutineCard(
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     onAddSchedule: () -> Unit,
+    onAddScheduleInline: (hour: Int, minute: Int) -> Unit = { _, _ -> },
     onEditSchedule: (String) -> Unit,
     onToggleSchedule: (String, Boolean) -> Unit,
     onDeleteSchedule: (String) -> Unit
@@ -521,103 +630,104 @@ fun RoutineCard(
                 Text("Start Routine", fontWeight = FontWeight.Bold)
             }
 
-            // Inline Accordion Editor (Opens directly in-place without page jump)
+            // Inline Accordion Editor with 3 Distinct Visual Container Sections
             AnimatedVisibility(visible = isEditing) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .padding(top = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-                    // 1. Title Input
-                    OutlinedTextField(
-                        value = editingName,
-                        onValueChange = { newName ->
-                            editingName = newName
-                            onUpdateRoutine(
-                                routineWithDetails.routine.copy(name = newName, icon = editingIcon),
-                                editingSteps
-                            )
-                        },
-                        label = { Text("Routine Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true
-                    )
-
-                    // 2. Companion Selector (Gamified with unlock levels)
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    // SECTION 1: Routine Details & Companion
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Routine Companion",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Level ${userStats.level}",
+                                text = "ROUTINE DETAILS",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            UserStats.ALL_COMPANIONS.forEach { companion ->
-                                val isUnlocked = userStats.isAvatarUnlocked(companion)
-                                val isSelected = editingIcon == companion.emoji
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(50.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            when {
-                                                isSelected -> MaterialTheme.colorScheme.primaryContainer
-                                                isUnlocked -> MaterialTheme.colorScheme.surface
-                                                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                            }
-                                        )
-                                        .clickable(enabled = isUnlocked) {
-                                            editingIcon = companion.emoji
-                                            onUpdateRoutine(
-                                                routineWithDetails.routine.copy(name = editingName, icon = companion.emoji),
-                                                editingSteps
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
+                            OutlinedTextField(
+                                value = editingName,
+                                onValueChange = { newName ->
+                                    editingName = newName
+                                    onUpdateRoutine(
+                                        routineWithDetails.routine.copy(name = newName, icon = editingIcon),
+                                        editingSteps
+                                    )
+                                },
+                                label = { Text("Routine Name") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = companion.emoji,
-                                        fontSize = if (isSelected) 26.sp else 20.sp,
-                                        modifier = Modifier.graphicsLayer {
-                                            alpha = if (isUnlocked) 1f else 0.35f
-                                        }
+                                        text = "Companion Avatar",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
                                     )
-                                    if (!isUnlocked) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                            modifier = Modifier.align(Alignment.BottomEnd).padding(2.dp)
+                                    Text(
+                                        text = "Level ${userStats.level}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    UserStats.ALL_COMPANIONS.forEach { companion ->
+                                        val isUnlocked = userStats.isAvatarUnlocked(companion)
+                                        val isSelected = editingIcon == companion.emoji
+
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    when {
+                                                        isSelected -> MaterialTheme.colorScheme.primaryContainer
+                                                        isUnlocked -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                                                    }
+                                                )
+                                                .clickable(enabled = isUnlocked) {
+                                                    editingIcon = companion.emoji
+                                                    onUpdateRoutine(
+                                                        routineWithDetails.routine.copy(name = editingName, icon = companion.emoji),
+                                                        editingSteps
+                                                    )
+                                                },
+                                            contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text = "Lv${companion.requiredLevel}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = MaterialTheme.colorScheme.outline,
-                                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                                text = companion.emoji,
+                                                fontSize = if (isSelected) 24.sp else 18.sp,
+                                                modifier = Modifier.graphicsLayer {
+                                                    alpha = if (isUnlocked) 1f else 0.3f
+                                                }
                                             )
                                         }
                                     }
@@ -626,115 +736,172 @@ fun RoutineCard(
                         }
                     }
 
-                    // 3. Reorderable Step List with Floating Drag Handle
-                    Text(
-                        text = "Steps (${editingSteps.size}) • Drag ≡ to Reorder",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // SECTION 2: Steps & Quick Add Step (Type & Enter)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        editingSteps.forEachIndexed { index, step ->
-                            val isExpanded = expandedStepId == step.id
-                            val isBeingDragged = draggedStepIndex == index
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "STEPS (${editingSteps.size})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Drag ≡ to reorder",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
 
-                            InlineStepAccordionItem(
-                                step = step,
-                                index = index,
-                                totalSteps = editingSteps.size,
-                                isExpanded = isExpanded,
-                                isBeingDragged = isBeingDragged,
-                                dragOffsetY = dragOffsetY,
-                                onToggleExpand = {
-                                    expandedStepId = if (isExpanded) null else step.id
-                                },
-                                onUpdateStep = { name, mins, isForceful ->
-                                    val updated = editingSteps.toMutableList()
-                                    updated[index] = step.copy(
-                                        name = name,
-                                        durationMinutes = mins,
-                                        isForcefulAlarm = isForceful
-                                    )
-                                    editingSteps = updated
-                                    onUpdateRoutine(
-                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                        updated
-                                    )
-                                },
-                                onDragStart = {
-                                    draggedStepIndex = index
-                                    dragOffsetY = 0f
-                                },
-                                onDrag = { deltaY ->
-                                    dragOffsetY += deltaY
-                                    val current = draggedStepIndex ?: return@InlineStepAccordionItem
-                                    if (dragOffsetY > itemHeightPx * 0.7f && current < editingSteps.size - 1) {
-                                        val updated = editingSteps.toMutableList()
-                                        val item = updated.removeAt(current)
-                                        updated.add(current + 1, item)
-                                        editingSteps = updated
-                                        draggedStepIndex = current + 1
-                                        dragOffsetY -= itemHeightPx
-                                        onUpdateRoutine(
-                                            routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                            updated
-                                        )
-                                    } else if (dragOffsetY < -itemHeightPx * 0.7f && current > 0) {
-                                        val updated = editingSteps.toMutableList()
-                                        val item = updated.removeAt(current)
-                                        updated.add(current - 1, item)
-                                        editingSteps = updated
-                                        draggedStepIndex = current - 1
-                                        dragOffsetY += itemHeightPx
-                                        onUpdateRoutine(
-                                            routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                            updated
-                                        )
-                                    }
-                                },
-                                onDragEnd = {
-                                    draggedStepIndex = null
-                                    dragOffsetY = 0f
-                                },
-                                onDelete = {
-                                    val updated = editingSteps.toMutableList()
-                                    updated.removeAt(index)
-                                    editingSteps = updated
-                                    onUpdateRoutine(
-                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                        updated
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                editingSteps.forEachIndexed { index, step ->
+                                    val isExpanded = expandedStepId == step.id
+                                    val isBeingDragged = draggedStepIndex == index
+
+                                    InlineStepAccordionItem(
+                                        step = step,
+                                        index = index,
+                                        isExpanded = isExpanded,
+                                        isBeingDragged = isBeingDragged,
+                                        dragOffsetY = dragOffsetY,
+                                        onToggleExpand = {
+                                            expandedStepId = if (isExpanded) null else step.id
+                                        },
+                                        onUpdateStep = { name, mins ->
+                                            val updated = editingSteps.toMutableList()
+                                            updated[index] = step.copy(
+                                                name = name,
+                                                durationMinutes = mins,
+                                                isForcefulAlarm = true
+                                            )
+                                            editingSteps = updated
+                                            onUpdateRoutine(
+                                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                updated
+                                            )
+                                        },
+                                        onDragStart = {
+                                            draggedStepIndex = index
+                                            dragOffsetY = 0f
+                                        },
+                                        onDrag = { deltaY ->
+                                            dragOffsetY += deltaY
+                                            val current = draggedStepIndex ?: return@InlineStepAccordionItem
+                                            if (dragOffsetY > itemHeightPx * 0.7f && current < editingSteps.size - 1) {
+                                                val updated = editingSteps.toMutableList()
+                                                val item = updated.removeAt(current)
+                                                updated.add(current + 1, item)
+                                                editingSteps = updated
+                                                draggedStepIndex = current + 1
+                                                dragOffsetY -= itemHeightPx
+                                                onUpdateRoutine(
+                                                    routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                    updated
+                                                )
+                                            } else if (dragOffsetY < -itemHeightPx * 0.7f && current > 0) {
+                                                val updated = editingSteps.toMutableList()
+                                                val item = updated.removeAt(current)
+                                                updated.add(current - 1, item)
+                                                editingSteps = updated
+                                                draggedStepIndex = current - 1
+                                                dragOffsetY += itemHeightPx
+                                                onUpdateRoutine(
+                                                    routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                    updated
+                                                )
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            draggedStepIndex = null
+                                            dragOffsetY = 0f
+                                        },
+                                        onDelete = {
+                                            val updated = editingSteps.toMutableList()
+                                            updated.removeAt(index)
+                                            editingSteps = updated
+                                            onUpdateRoutine(
+                                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                updated
+                                            )
+                                        }
                                     )
                                 }
-                            )
-                        }
-                    }
+                            }
 
-                    // 4. Quick Add Step: Inline empty placeholder you can start typing into
-                    OutlinedTextField(
-                        value = newStepInput,
-                        onValueChange = { newStepInput = it },
-                        placeholder = {
-                            Text(
-                                text = "Add a step (e.g. Drink water, Stretch)...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            if (newStepInput.isNotBlank()) {
-                                IconButton(
-                                    onClick = {
+                            // Quick Add Step Placeholder
+                            OutlinedTextField(
+                                value = newStepInput,
+                                onValueChange = { newStepInput = it },
+                                placeholder = {
+                                    Text(
+                                        text = "Add a step (e.g. Drink water, Stretch)...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (newStepInput.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                val stepName = newStepInput.trim()
+                                                if (stepName.isNotEmpty()) {
+                                                    val newStep = RoutineStep(
+                                                        id = UUID.randomUUID().toString(),
+                                                        routineId = routineWithDetails.routine.id,
+                                                        name = stepName,
+                                                        orderIndex = editingSteps.size,
+                                                        durationMinutes = 5,
+                                                        durationSeconds = 0,
+                                                        isForcefulAlarm = true
+                                                    )
+                                                    val updated = editingSteps + newStep
+                                                    editingSteps = updated
+                                                    newStepInput = ""
+                                                    onUpdateRoutine(
+                                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                        updated
+                                                    )
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Save Step",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                    capitalization = KeyboardCapitalization.Sentences
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
                                         val stepName = newStepInput.trim()
                                         if (stepName.isNotEmpty()) {
                                             val newStep = RoutineStep(
@@ -744,7 +911,7 @@ fun RoutineCard(
                                                 orderIndex = editingSteps.size,
                                                 durationMinutes = 5,
                                                 durationSeconds = 0,
-                                                isForcefulAlarm = false
+                                                isForcefulAlarm = true
                                             )
                                             val updated = editingSteps + newStep
                                             editingSteps = updated
@@ -755,51 +922,139 @@ fun RoutineCard(
                                             )
                                         }
                                     }
-                                ) {
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                        }
+                    }
+
+                    // SECTION 3: Alarm Schedules & Type & Enter Quick Creator
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        tonalElevation = 1.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "ALARM SCHEDULES (${routineWithDetails.schedules.size})",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            if (routineWithDetails.schedules.isNotEmpty()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    routineWithDetails.schedules.forEach { schedule ->
+                                        ScheduleItemRow(
+                                            schedule = schedule,
+                                            onToggle = { enabled -> onToggleSchedule(schedule.id, enabled) },
+                                            onEdit = { onEditSchedule(schedule.id) },
+                                            onDelete = { onDeleteSchedule(schedule.id) }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Quick Time Presets
+                            Text(
+                                text = "Quick Add Presets:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    Pair("7:00 AM", Pair(7, 0)),
+                                    Pair("7:30 AM", Pair(7, 30)),
+                                    Pair("8:00 AM", Pair(8, 0)),
+                                    Pair("8:30 AM", Pair(8, 30)),
+                                    Pair("9:00 PM", Pair(21, 0)),
+                                    Pair("10:00 PM", Pair(22, 0))
+                                ).forEach { (label, time) ->
+                                    FilterChip(
+                                        selected = false,
+                                        onClick = {
+                                            onAddScheduleInline(time.first, time.second)
+                                        },
+                                        label = { Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Inline Custom Time Input (Type & Enter)
+                            var scheduleInputText by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = scheduleInputText,
+                                onValueChange = { scheduleInputText = it },
+                                placeholder = {
+                                    Text(
+                                        text = "Add custom alarm (e.g. 6:45 AM, 21:30)...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                },
+                                leadingIcon = {
                                     Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = "Save Step",
-                                        tint = MaterialTheme.colorScheme.primary
+                                        Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                }
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Done,
-                            capitalization = KeyboardCapitalization.Sentences
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                val stepName = newStepInput.trim()
-                                if (stepName.isNotEmpty()) {
-                                    val newStep = RoutineStep(
-                                        id = UUID.randomUUID().toString(),
-                                        routineId = routineWithDetails.routine.id,
-                                        name = stepName,
-                                        orderIndex = editingSteps.size,
-                                        durationMinutes = 5,
-                                        durationSeconds = 0,
-                                        isForcefulAlarm = false
-                                    )
-                                    val updated = editingSteps + newStep
-                                    editingSteps = updated
-                                    newStepInput = ""
-                                    onUpdateRoutine(
-                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                        updated
-                                    )
-                                }
-                            }
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                                },
+                                trailingIcon = {
+                                    if (scheduleInputText.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                parseTimeString(scheduleInputText.trim())?.let { (h, m) ->
+                                                    onAddScheduleInline(h, m)
+                                                    scheduleInputText = ""
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Save Schedule",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        parseTimeString(scheduleInputText.trim())?.let { (h, m) ->
+                                            onAddScheduleInline(h, m)
+                                            scheduleInputText = ""
+                                        }
+                                    }
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            // Schedules Section (shown compactly if active, or when editing)
-            if (routineWithDetails.schedules.isNotEmpty()) {
+            // Compact Schedules Summary (shown when collapsed only if schedules exist)
+            if (!isEditing && routineWithDetails.schedules.isNotEmpty()) {
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
@@ -835,32 +1090,6 @@ fun RoutineCard(
                         )
                     }
                 }
-            } else if (isEditing) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Alarm Schedule",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    TextButton(
-                        onClick = onAddSchedule,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Schedule", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
             }
         }
     }
@@ -870,12 +1099,11 @@ fun RoutineCard(
 fun InlineStepAccordionItem(
     step: RoutineStep,
     index: Int,
-    totalSteps: Int,
     isExpanded: Boolean,
     isBeingDragged: Boolean,
     dragOffsetY: Float,
     onToggleExpand: () -> Unit,
-    onUpdateStep: (name: String, minutes: Int, isForceful: Boolean) -> Unit,
+    onUpdateStep: (name: String, minutes: Int) -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
@@ -965,10 +1193,6 @@ fun InlineStepAccordionItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = if (step.isForcefulAlarm) "🚨" else "🔔",
-                        fontSize = 12.sp
-                    )
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -990,7 +1214,7 @@ fun InlineStepAccordionItem(
                 }
             }
 
-            // Expanded details: Step name field, duration steppers & presets, alarm toggle, delete button
+            // Expanded details: Step name field, duration steppers & presets, delete button
             AnimatedVisibility(visible = isExpanded) {
                 Column(
                     modifier = Modifier
@@ -1001,7 +1225,7 @@ fun InlineStepAccordionItem(
                     OutlinedTextField(
                         value = step.name,
                         onValueChange = { newName ->
-                            onUpdateStep(newName, step.durationMinutes, step.isForcefulAlarm)
+                            onUpdateStep(newName, step.durationMinutes)
                         },
                         label = { Text("Step Name") },
                         modifier = Modifier.fillMaxWidth(),
@@ -1027,7 +1251,7 @@ fun InlineStepAccordionItem(
                             IconButton(
                                 onClick = {
                                     val newMins = (step.durationMinutes - 1).coerceAtLeast(1)
-                                    onUpdateStep(step.name, newMins, step.isForcefulAlarm)
+                                    onUpdateStep(step.name, newMins)
                                 }
                             ) {
                                 Icon(Icons.Default.Remove, contentDescription = "Decrease duration")
@@ -1042,7 +1266,7 @@ fun InlineStepAccordionItem(
                             IconButton(
                                 onClick = {
                                     val newMins = (step.durationMinutes + 1).coerceAtMost(180)
-                                    onUpdateStep(step.name, newMins, step.isForcefulAlarm)
+                                    onUpdateStep(step.name, newMins)
                                 }
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Increase duration")
@@ -1058,50 +1282,12 @@ fun InlineStepAccordionItem(
                                 FilterChip(
                                     selected = step.durationMinutes == presetMins,
                                     onClick = {
-                                        onUpdateStep(step.name, presetMins, step.isForcefulAlarm)
+                                        onUpdateStep(step.name, presetMins)
                                     },
                                     label = { Text("${presetMins}m", fontSize = 11.sp) }
                                 )
                             }
                         }
-                    }
-
-                    // Alarm vs Gentle Chime Toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                onUpdateStep(step.name, step.durationMinutes, !step.isForcefulAlarm)
-                            }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(if (step.isForcefulAlarm) "🚨" else "🔔", fontSize = 18.sp)
-                            Column {
-                                Text(
-                                    text = if (step.isForcefulAlarm) "Forceful Alarm" else "Gentle Chime",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = if (step.isForcefulAlarm) "Rings continuously like an alarm clock" else "Single audio chime reminder",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-                        Switch(
-                            checked = step.isForcefulAlarm,
-                            onCheckedChange = { isChecked ->
-                                onUpdateStep(step.name, step.durationMinutes, isChecked)
-                            }
-                        )
                     }
 
                     // Delete step button
