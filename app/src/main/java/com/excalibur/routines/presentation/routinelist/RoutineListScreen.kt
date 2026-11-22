@@ -33,6 +33,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -375,6 +379,7 @@ fun RoutineCard(
     var expandedStepId by remember { mutableStateOf<String?>(null) }
     var draggedStepIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    var newStepInput by remember { mutableStateOf("") }
     val itemHeightPx = with(LocalDensity.current) { 72.dp.toPx() }
 
     Card(
@@ -392,7 +397,9 @@ fun RoutineCard(
         Column(modifier = Modifier.padding(14.dp)) {
             // Header: Animal Avatar, Title, Duration Badge, Options Menu & Chevron
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleEdit() },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -499,39 +506,19 @@ fun RoutineCard(
                 }
             }
 
-            // Quick Run & Edit Steps Action Row
+            // Quick Run Action
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FilledTonalButton(
+                onClick = onStart,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp)
             ) {
-                // "Start Routine" Button
-                FilledTonalButton(
-                    onClick = onStart,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.weight(1f).height(38.dp)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Start Routine", fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
-                    onClick = onToggleEdit,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.height(38.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (isEditing) "Done" else "Edit Steps", fontWeight = FontWeight.SemiBold)
-                }
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Start Routine", fontWeight = FontWeight.Bold)
             }
 
             // Inline Accordion Editor (Opens directly in-place without page jump)
@@ -725,54 +712,89 @@ fun RoutineCard(
                         }
                     }
 
-                    // 4. Action Buttons (Add Step & Done side by side)
-                    Row(
+                    // 4. Quick Add Step: Inline empty placeholder you can start typing into
+                    OutlinedTextField(
+                        value = newStepInput,
+                        onValueChange = { newStepInput = it },
+                        placeholder = {
+                            Text(
+                                text = "Add a step (e.g. Drink water, Stretch)...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            if (newStepInput.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        val stepName = newStepInput.trim()
+                                        if (stepName.isNotEmpty()) {
+                                            val newStep = RoutineStep(
+                                                id = UUID.randomUUID().toString(),
+                                                routineId = routineWithDetails.routine.id,
+                                                name = stepName,
+                                                orderIndex = editingSteps.size,
+                                                durationMinutes = 5,
+                                                durationSeconds = 0,
+                                                isForcefulAlarm = false
+                                            )
+                                            val updated = editingSteps + newStep
+                                            editingSteps = updated
+                                            newStepInput = ""
+                                            onUpdateRoutine(
+                                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                                updated
+                                            )
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = "Save Step",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Done,
+                            capitalization = KeyboardCapitalization.Sentences
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                val stepName = newStepInput.trim()
+                                if (stepName.isNotEmpty()) {
+                                    val newStep = RoutineStep(
+                                        id = UUID.randomUUID().toString(),
+                                        routineId = routineWithDetails.routine.id,
+                                        name = stepName,
+                                        orderIndex = editingSteps.size,
+                                        durationMinutes = 5,
+                                        durationSeconds = 0,
+                                        isForcefulAlarm = false
+                                    )
+                                    val updated = editingSteps + newStep
+                                    editingSteps = updated
+                                    newStepInput = ""
+                                    onUpdateRoutine(
+                                        routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                        updated
+                                    )
+                                }
+                            }
+                        ),
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                val newStep = RoutineStep(
-                                    id = UUID.randomUUID().toString(),
-                                    routineId = routineWithDetails.routine.id,
-                                    name = "New Step",
-                                    orderIndex = editingSteps.size,
-                                    durationMinutes = 5,
-                                    durationSeconds = 0,
-                                    isForcefulAlarm = false
-                                )
-                                val updated = editingSteps + newStep
-                                editingSteps = updated
-                                expandedStepId = newStep.id
-                                onUpdateRoutine(
-                                    routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                    updated
-                                )
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Add Step", fontWeight = FontWeight.Bold)
-                        }
-
-                        Button(
-                            onClick = onToggleEdit,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Done", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                        shape = RoundedCornerShape(12.dp)
+                    )
                 }
             }
 
