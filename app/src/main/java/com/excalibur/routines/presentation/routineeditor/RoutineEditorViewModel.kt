@@ -72,9 +72,11 @@ class RoutineEditorViewModel @Inject constructor(
         _uiState.update { it.copy(icon = icon) }
     }
 
-    fun addStep(name: String, minutes: Int, isForcefulAlarm: Boolean) {
+    fun addStep(name: String = "", minutes: Int = 10, isForcefulAlarm: Boolean = false): String {
+        val stepId = UUID.randomUUID().toString()
         _uiState.update { current ->
             val newStep = RoutineStep(
+                id = stepId,
                 routineId = current.routineId,
                 name = name.ifBlank { "Step ${current.steps.size + 1}" },
                 orderIndex = current.steps.size,
@@ -84,6 +86,7 @@ class RoutineEditorViewModel @Inject constructor(
             )
             current.copy(steps = current.steps + newStep)
         }
+        return stepId
     }
 
     fun updateStep(stepId: String, name: String, minutes: Int, isForcefulAlarm: Boolean) {
@@ -91,7 +94,7 @@ class RoutineEditorViewModel @Inject constructor(
             val updated = current.steps.map { step ->
                 if (step.id == stepId) {
                     step.copy(
-                        name = name.ifBlank { step.name },
+                        name = name,
                         durationMinutes = minutes.coerceAtLeast(1),
                         durationSeconds = 0,
                         isForcefulAlarm = isForcefulAlarm
@@ -139,6 +142,27 @@ class RoutineEditorViewModel @Inject constructor(
             )
             saveRoutineUseCase(routine, current.steps)
             onSuccess()
+        }
+    }
+
+    fun saveAndNavigateBack(onNavigateBack: () -> Unit) {
+        val current = _uiState.value
+        val trimmedName = current.name.trim()
+        if (trimmedName.isBlank() && current.steps.isEmpty()) {
+            onNavigateBack()
+            return
+        }
+        val effectiveName = trimmedName.ifBlank { "Routine" }
+        _uiState.update { it.copy(isSaving = true) }
+        viewModelScope.launch {
+            val routine = Routine(
+                id = current.routineId,
+                name = effectiveName,
+                description = current.description.trim(),
+                icon = current.icon
+            )
+            saveRoutineUseCase(routine, current.steps)
+            onNavigateBack()
         }
     }
 }

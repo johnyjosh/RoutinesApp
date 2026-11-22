@@ -1,12 +1,13 @@
 package com.excalibur.routines.presentation.routineeditor
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,17 +28,17 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -62,7 +63,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.RoutineAvatar
@@ -75,16 +75,25 @@ fun RoutineEditorScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showAddStepDialog by remember { mutableStateOf(false) }
-    var editingStep by remember { mutableStateOf<RoutineStep?>(null) }
+    var expandedStepId by remember { mutableStateOf<String?>(null) }
+
+    // Auto-save on system back gesture
+    BackHandler {
+        viewModel.saveAndNavigateBack(onNavigateBack)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isNew) "New Routine" else "Edit Routine") },
+                title = {
+                    Text(
+                        text = if (uiState.isNew) "New Routine" else "Edit Routine",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = { viewModel.saveAndNavigateBack(onNavigateBack) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back & Save")
                     }
                 },
                 actions = {
@@ -92,15 +101,9 @@ fun RoutineEditorScreen(
                         CircularProgressIndicator(
                             modifier = Modifier
                                 .padding(16.dp)
-                                .size(24.dp)
+                                .size(20.dp),
+                            strokeWidth = 2.dp
                         )
-                    } else {
-                        IconButton(
-                            onClick = { viewModel.save(onSuccess = onNavigateBack) },
-                            enabled = uiState.name.isNotBlank()
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = "Save")
-                        }
                     }
                 }
             )
@@ -199,7 +202,10 @@ fun RoutineEditorScreen(
                     )
 
                     Button(
-                        onClick = { showAddStepDialog = true },
+                        onClick = {
+                            val newStepId = viewModel.addStep()
+                            expandedStepId = newStepId
+                        },
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -241,179 +247,198 @@ fun RoutineEditorScreen(
                 }
             } else {
                 itemsIndexed(uiState.steps, key = { _, step -> step.id }) { index, step ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { editingStep = step },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Grip Handle
-                                Icon(
-                                    imageVector = Icons.Default.DragHandle,
-                                    contentDescription = "Reorder",
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.padding(end = 10.dp)
-                                )
-
-                                Column {
-                                    Text(
-                                        text = "${index + 1}. ${step.name}",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer
-                                        ) {
-                                            Text(
-                                                text = step.formattedDuration,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-
-                                        Text(
-                                            text = if (step.isForcefulAlarm) "🚨 Alarm" else "🔔 Chime",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
-                                    }
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { editingStep = step }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit Step", modifier = Modifier.size(20.dp))
-                                }
-                                IconButton(
-                                    onClick = { viewModel.moveStep(index, index - 1) },
-                                    enabled = index > 0
-                                ) {
-                                    Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(20.dp))
-                                }
-                                IconButton(
-                                    onClick = { viewModel.moveStep(index, index + 1) },
-                                    enabled = index < uiState.steps.size - 1
-                                ) {
-                                    Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(20.dp))
-                                }
-                                IconButton(onClick = { viewModel.removeStep(step.id) }) {
-                                    Icon(
-                                        Icons.Default.DeleteOutline,
-                                        contentDescription = "Remove",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                    val isExpanded = expandedStepId == step.id
+                    InlineStepCard(
+                        step = step,
+                        index = index,
+                        totalSteps = uiState.steps.size,
+                        isExpanded = isExpanded,
+                        onToggleExpand = {
+                            expandedStepId = if (isExpanded) null else step.id
+                        },
+                        onUpdateStep = { name, mins, isForceful ->
+                            viewModel.updateStep(step.id, name, mins, isForceful)
+                        },
+                        onMoveUp = { viewModel.moveStep(index, index - 1) },
+                        onMoveDown = { viewModel.moveStep(index, index + 1) },
+                        onRemove = {
+                            if (expandedStepId == step.id) expandedStepId = null
+                            viewModel.removeStep(step.id)
                         }
-                    }
+                    )
                 }
             }
         }
     }
-
-    if (showAddStepDialog) {
-        StepEditorDialog(
-            initialStep = null,
-            onDismiss = { showAddStepDialog = false },
-            onConfirm = { name, mins, isForceful ->
-                viewModel.addStep(name, mins, isForceful)
-                showAddStepDialog = false
-            }
-        )
-    }
-
-    editingStep?.let { step ->
-        StepEditorDialog(
-            initialStep = step,
-            onDismiss = { editingStep = null },
-            onConfirm = { name, mins, isForceful ->
-                viewModel.updateStep(step.id, name, mins, isForceful)
-                editingStep = null
-            }
-        )
-    }
 }
 
 @Composable
-fun StepEditorDialog(
-    initialStep: RoutineStep? = null,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, minutes: Int, isForceful: Boolean) -> Unit
+fun InlineStepCard(
+    step: RoutineStep,
+    index: Int,
+    totalSteps: Int,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onUpdateStep: (name: String, minutes: Int, isForceful: Boolean) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit
 ) {
-    var stepName by remember(initialStep) { mutableStateOf(initialStep?.name ?: "") }
-    var minutes by remember(initialStep) {
-        mutableStateOf(initialStep?.durationMinutes?.coerceAtLeast(1) ?: 10)
-    }
-    var isForceful by remember(initialStep) {
-        mutableStateOf(initialStep?.isForcefulAlarm ?: true)
-    }
     val haptic = LocalHapticFeedback.current
 
-    val isEditing = initialStep != null
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isExpanded)
+                MaterialTheme.colorScheme.surfaceVariant
+            else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            // Header Row: Summary & Expand Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggleExpand() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(
+                                if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${index + 1}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isEditing) "Edit Step" else "Add Routine Step") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column {
+                        Text(
+                            text = step.name.ifBlank { "Step ${index + 1}" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = step.formattedDuration,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = if (step.isForcefulAlarm) "🚨 Alarm" else "🔔 Chime",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onMoveUp,
+                        enabled = index > 0,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
+                    }
+                    IconButton(
+                        onClick = onMoveDown,
+                        enabled = index < totalSteps - 1,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
+                    }
+                    IconButton(
+                        onClick = onToggleExpand,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // Expanded Inline Controls
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+
                 OutlinedTextField(
-                    value = stepName,
-                    onValueChange = { stepName = it },
+                    value = step.name,
+                    onValueChange = { onUpdateStep(it, step.durationMinutes, step.isForcefulAlarm) },
                     label = { Text("Step Name") },
-                    placeholder = { Text("e.g. Stretching") },
+                    placeholder = { Text("e.g. Stretching, Shower, Meditate") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true
                 )
 
-                // Duration Stepper Header
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Text(
                     text = "Duration",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Tactile Stepper Control
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Tactile Stepper Control (-5, -1, [X min], +1, +5)
                 Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         FilledTonalIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                minutes = (minutes - 5).coerceAtLeast(1)
+                                onUpdateStep(step.name, (step.durationMinutes - 5).coerceAtLeast(1), step.isForcefulAlarm)
                             },
-                            enabled = minutes > 5,
-                            modifier = Modifier.size(38.dp)
+                            enabled = step.durationMinutes > 5,
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text("-5", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                         }
@@ -421,115 +446,133 @@ fun StepEditorDialog(
                         FilledTonalIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                minutes = (minutes - 1).coerceAtLeast(1)
+                                onUpdateStep(step.name, (step.durationMinutes - 1).coerceAtLeast(1), step.isForcefulAlarm)
                             },
-                            enabled = minutes > 1,
-                            modifier = Modifier.size(38.dp)
+                            enabled = step.durationMinutes > 1,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Default.Remove, contentDescription = "Decrease 1 minute", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Remove, contentDescription = "Decrease 1 min", modifier = Modifier.size(16.dp))
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier.padding(horizontal = 4.dp)
                         ) {
                             Text(
-                                text = "${minutes} min",
+                                text = "${step.durationMinutes} min",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                             )
                         }
 
                         FilledTonalIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                minutes = (minutes + 1).coerceAtMost(360)
+                                onUpdateStep(step.name, (step.durationMinutes + 1).coerceAtMost(360), step.isForcefulAlarm)
                             },
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Increase 1 minute", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, contentDescription = "Increase 1 min", modifier = Modifier.size(16.dp))
                         }
 
                         FilledTonalIconButton(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                minutes = (minutes + 5).coerceAtMost(360)
+                                onUpdateStep(step.name, (step.durationMinutes + 5).coerceAtMost(360), step.isForcefulAlarm)
                             },
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Text("+5", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
 
-                // Quick Preset Chips (1-tap selection)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Quick Preset Chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf(1, 5, 10, 15, 20, 25, 30, 45, 60).forEach { presetMins ->
+                    val presets = listOf(1, 5, 10, 15, 20, 25, 30, 45, 60)
+                    presets.forEach { presetMinutes ->
+                        val isSelected = step.durationMinutes == presetMinutes
                         FilterChip(
-                            selected = minutes == presetMins,
+                            selected = isSelected,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                minutes = presetMins
+                                onUpdateStep(step.name, presetMinutes, step.isForcefulAlarm)
                             },
-                            label = {
-                                Text(
-                                    "${presetMins}m",
-                                    fontWeight = if (minutes == presetMins) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
+                            label = { Text("${presetMinutes}m") },
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
                 }
 
-                // Alert Style Choice: Forceful Alarm vs Quick Chime
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Text(
                     text = "Reminder Strength",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     FilterChip(
-                        selected = isForceful,
-                        onClick = { isForceful = true },
+                        selected = step.isForcefulAlarm,
+                        onClick = { onUpdateStep(step.name, step.durationMinutes, true) },
                         label = { Text("🚨 Forceful Alarm") },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
                     )
+
                     FilterChip(
-                        selected = !isForceful,
-                        onClick = { isForceful = false },
+                        selected = !step.isForcefulAlarm,
+                        onClick = { onUpdateStep(step.name, step.durationMinutes, false) },
                         label = { Text("🔔 Quick Chime") },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
                     )
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (minutes > 0) {
-                        onConfirm(stepName, minutes, isForceful)
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Bottom Actions: Remove and Done
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onRemove,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Delete Step")
                     }
-                },
-                enabled = minutes > 0
-            ) {
-                Text(if (isEditing) "Save" else "Add")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+
+                    FilledTonalButton(
+                        onClick = onToggleExpand,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Done")
+                    }
+                }
             }
         }
-    )
+    }
 }

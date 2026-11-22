@@ -73,6 +73,11 @@ fun ScheduleEditorScreen(
 
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
+    // Auto-save on system back gesture
+    androidx.activity.compose.BackHandler {
+        viewModel.save(onSuccess = onNavigateBack)
+    }
+
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -81,8 +86,8 @@ fun ScheduleEditorScreen(
             TopAppBar(
                 title = { Text(if (uiState.isNew) "Add Schedule" else "Edit Schedule") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = { viewModel.save(onSuccess = onNavigateBack) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back & Save")
                     }
                 },
                 actions = {
