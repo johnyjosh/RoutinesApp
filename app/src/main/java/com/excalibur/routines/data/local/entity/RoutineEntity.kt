@@ -9,6 +9,7 @@ data class RoutineEntity(
     @PrimaryKey val id: String,
     val name: String,
     val description: String,
+    val icon: String = "🦊",
     val createdAt: Long,
     val updatedAt: Long
 ) {
@@ -16,6 +17,7 @@ data class RoutineEntity(
         id = id,
         name = name,
         description = description,
+        icon = icon,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
@@ -25,6 +27,7 @@ data class RoutineEntity(
             id = routine.id,
             name = routine.name,
             description = routine.description,
+            icon = routine.icon,
             createdAt = routine.createdAt,
             updatedAt = routine.updatedAt
         )

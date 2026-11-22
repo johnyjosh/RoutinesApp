@@ -4,7 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.excalibur.routines.domain.model.RoutineAvatar
 import com.excalibur.routines.domain.model.RoutineSchedule
+import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.repository.RoutineRepository
 import com.excalibur.routines.domain.repository.ScheduleRepository
 import com.excalibur.routines.domain.usecase.SaveScheduleUseCase
@@ -23,6 +25,8 @@ import javax.inject.Inject
 data class ScheduleEditorUiState(
     val routineId: String = "",
     val routineName: String = "",
+    val avatar: RoutineAvatar = RoutineAvatar.FOX,
+    val steps: List<RoutineStep> = emptyList(),
     val scheduleId: String = UUID.randomUUID().toString(),
     val label: String = "",
     val startHour: Int = LocalTime.now().hour,
@@ -52,6 +56,9 @@ class ScheduleEditorViewModel @Inject constructor(
         viewModelScope.launch {
             val routineWithDetails = routineRepository.getRoutineWithDetailsOnce(route.routineId)
             val routineName = routineWithDetails?.routine?.name ?: "Routine"
+            val icon = routineWithDetails?.routine?.icon ?: "🦊"
+            val avatar = RoutineAvatar.fromEmoji(icon)
+            val steps = routineWithDetails?.steps?.sortedBy { it.orderIndex } ?: emptyList()
 
             val scheduleId = route.scheduleId
             if (scheduleId != null) {
@@ -60,6 +67,8 @@ class ScheduleEditorViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             routineName = routineName,
+                            avatar = avatar,
+                            steps = steps,
                             scheduleId = existing.id,
                             label = existing.label,
                             startHour = existing.startHour,
@@ -74,7 +83,13 @@ class ScheduleEditorViewModel @Inject constructor(
                 }
             }
 
-            _uiState.update { it.copy(routineName = routineName) }
+            _uiState.update {
+                it.copy(
+                    routineName = routineName,
+                    avatar = avatar,
+                    steps = steps
+                )
+            }
         }
     }
 

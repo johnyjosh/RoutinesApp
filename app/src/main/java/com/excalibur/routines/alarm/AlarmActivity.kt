@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,16 +18,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,14 +44,19 @@ class AlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        enableEdgeToEdge()
         turnScreenOnAndDismissKeyguard()
 
+        // Keep screen awake while this alert activity is visible
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         val routineName = intent.getStringExtra(AlarmSchedulerImpl.EXTRA_ROUTINE_NAME) ?: "Routine Alarm"
+        val routineIcon = intent.getStringExtra(AlarmSchedulerImpl.EXTRA_ROUTINE_ICON) ?: "🦊"
         val stepName = intent.getStringExtra(AlarmSchedulerImpl.EXTRA_STEP_NAME) ?: "Step"
         val stepIndex = intent.getIntExtra(AlarmSchedulerImpl.EXTRA_STEP_INDEX, 0)
         val totalSteps = intent.getIntExtra(AlarmSchedulerImpl.EXTRA_TOTAL_STEPS, 1)
         val nextStepName = intent.getStringExtra(AlarmSchedulerImpl.EXTRA_NEXT_STEP_NAME)
+        val isCompletion = intent.getBooleanExtra(AlarmSchedulerImpl.EXTRA_IS_COMPLETION, false)
 
         setContent {
             RoutinesTheme {
@@ -62,10 +66,12 @@ class AlarmActivity : ComponentActivity() {
                 ) {
                     AlarmRingingContent(
                         routineName = routineName,
+                        routineIcon = routineIcon,
                         stepName = stepName,
                         stepIndex = stepIndex,
                         totalSteps = totalSteps,
                         nextStepName = nextStepName,
+                        isCompletion = isCompletion,
                         onDismiss = {
                             val stopIntent = Intent(this, AlarmService::class.java).apply {
                                 action = AlarmService.ACTION_STOP_ALARM
@@ -101,38 +107,39 @@ class AlarmActivity : ComponentActivity() {
 @Composable
 fun AlarmRingingContent(
     routineName: String,
+    routineIcon: String,
     stepName: String,
     stepIndex: Int,
     totalSteps: Int,
     nextStepName: String?,
+    isCompletion: Boolean,
     onDismiss: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .safeDrawingPadding() // Ensures bottom button is never occluded by system navigation bar!
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Hero Icon & Routine title
+        // Hero Animal Avatar & Routine title
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(108.dp)
                     .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Alarm,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                Text(
+                    text = if (isCompletion) "🎉" else routineIcon,
+                    fontSize = 52.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = routineName,
@@ -142,17 +149,17 @@ fun AlarmRingingContent(
             )
 
             Text(
-                text = "Step ${stepIndex + 1} of $totalSteps",
+                text = if (isCompletion) "All tasks finished!" else "Step ${stepIndex + 1} of $totalSteps",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
 
-        // Current Step Card
+        // Current Step / Completion Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
@@ -160,17 +167,17 @@ fun AlarmRingingContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "CURRENT TASK",
+                    text = if (isCompletion) "CELEBRATION" else "CURRENT TASK",
                     style = MaterialTheme.typography.labelMedium,
-                    letterSpacing = 1.5.sp,
+                    letterSpacing = 2.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = stepName,
@@ -183,8 +190,9 @@ fun AlarmRingingContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Next: $nextStepName",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -202,7 +210,11 @@ fun AlarmRingingContent(
             )
         ) {
             Text(
-                text = if (stepIndex + 1 < totalSteps) "Got it! Start Step" else "Complete Routine",
+                text = when {
+                    isCompletion -> "Done! Great Job"
+                    stepIndex + 1 < totalSteps -> "Got it! Start Step"
+                    else -> "Start Final Step"
+                },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )

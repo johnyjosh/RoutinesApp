@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.excalibur.routines.R
@@ -31,6 +33,9 @@ class AlarmService : Service() {
     @Inject
     lateinit var alarmSoundManager: AlarmSoundManager
 
+    private val handler = Handler(Looper.getMainLooper())
+    private var autoDismissRunnable: Runnable? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -48,19 +53,23 @@ class AlarmService : Service() {
         }
 
         val routineName = intent?.getStringExtra(AlarmSchedulerImpl.EXTRA_ROUTINE_NAME) ?: "Routine Alarm"
+        val routineIcon = intent?.getStringExtra(AlarmSchedulerImpl.EXTRA_ROUTINE_ICON) ?: "🦊"
         val stepName = intent?.getStringExtra(AlarmSchedulerImpl.EXTRA_STEP_NAME) ?: "Step"
         val stepIndex = intent?.getIntExtra(AlarmSchedulerImpl.EXTRA_STEP_INDEX, 0) ?: 0
         val totalSteps = intent?.getIntExtra(AlarmSchedulerImpl.EXTRA_TOTAL_STEPS, 1) ?: 1
         val nextStepName = intent?.getStringExtra(AlarmSchedulerImpl.EXTRA_NEXT_STEP_NAME)
         val soundEnabled = intent?.getBooleanExtra(AlarmSchedulerImpl.EXTRA_SOUND_ENABLED, true) ?: true
         val vibrateEnabled = intent?.getBooleanExtra(AlarmSchedulerImpl.EXTRA_VIBRATE_ENABLED, true) ?: true
+        val isForceful = intent?.getBooleanExtra(AlarmSchedulerImpl.EXTRA_IS_FORCEFUL, true) ?: true
+        val isCompletion = intent?.getBooleanExtra(AlarmSchedulerImpl.EXTRA_IS_COMPLETION, false) ?: false
 
         val notification = buildNotification(
-            routineName = routineName,
+            routineName = "$routineIcon $routineName",
             stepName = stepName,
             stepIndex = stepIndex,
             totalSteps = totalSteps,
             nextStepName = nextStepName,
+            isCompletion = isCompletion,
             originalIntent = intent
         )
 
@@ -76,10 +85,20 @@ class AlarmService : Service() {
 
         alarmSoundManager.startAlarm(soundEnabled, vibrateEnabled)
 
+        // If Quick Chime mode (not forceful) or Completion chime, auto-dismiss sound after 4 seconds!
+        if (!isForceful || isCompletion) {
+            autoDismissRunnable?.let { handler.removeCallbacks(it) }
+            autoDismissRunnable = Runnable {
+                Log.d(TAG, "Quick chime elapsed; stopping sound automatically")
+                alarmSoundManager.stopAlarm()
+            }.also { handler.postDelayed(it, 4000L) }
+        }
+
         return START_NOT_STICKY
     }
 
     private fun stopAlarmAndService() {
+        autoDismissRunnable?.let { handler.removeCallbacks(it) }
         alarmSoundManager.stopAlarm()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -92,6 +111,7 @@ class AlarmService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        autoDismissRunnable?.let { handler.removeCallbacks(it) }
         alarmSoundManager.stopAlarm()
     }
 
@@ -118,6 +138,7 @@ class AlarmService : Service() {
         stepIndex: Int,
         totalSteps: Int,
         nextStepName: String?,
+        isCompletion: Boolean,
         originalIntent: Intent?
     ): Notification {
         val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
@@ -142,7 +163,12 @@ class AlarmService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = "$stepName • Step ${stepIndex + 1} of $totalSteps"
+        val contentText = if (isCompletion) {
+            "All $totalSteps steps finished! 🎉"
+        } else {
+            "$stepName • Step ${stepIndex + 1} of $totalSteps"
+        }
+
         val subText = nextStepName?.let { "Next: $it" }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -157,7 +183,7 @@ class AlarmService : Service() {
             .setAutoCancel(false)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
-            .addAction(0, "Dismiss", dismissPendingIntent)
+            .addAction(0, if (isCompletion) "Done" else "Dismiss", dismissPendingIntent)
             .build()
     }
 }

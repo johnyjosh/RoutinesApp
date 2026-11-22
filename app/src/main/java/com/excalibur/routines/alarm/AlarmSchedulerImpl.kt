@@ -32,6 +32,7 @@ class AlarmSchedulerImpl @Inject constructor(
         const val EXTRA_SCHEDULE_ID = "extra_schedule_id"
         const val EXTRA_ROUTINE_ID = "extra_routine_id"
         const val EXTRA_ROUTINE_NAME = "extra_routine_name"
+        const val EXTRA_ROUTINE_ICON = "extra_routine_icon"
         const val EXTRA_STEP_ID = "extra_step_id"
         const val EXTRA_STEP_NAME = "extra_step_name"
         const val EXTRA_STEP_INDEX = "extra_step_index"
@@ -39,11 +40,13 @@ class AlarmSchedulerImpl @Inject constructor(
         const val EXTRA_NEXT_STEP_NAME = "extra_next_step_name"
         const val EXTRA_SOUND_ENABLED = "extra_sound_enabled"
         const val EXTRA_VIBRATE_ENABLED = "extra_vibrate_enabled"
+        const val EXTRA_IS_FORCEFUL = "extra_is_forceful"
+        const val EXTRA_IS_COMPLETION = "extra_is_completion"
         const val EXTRA_DAY_OF_WEEK = "extra_day_of_week"
 
         fun generateRequestCode(scheduleId: String, dayOfWeek: DayOfWeek?, stepIndex: Int): Int {
             val dayVal = dayOfWeek?.value ?: 0
-            return (scheduleId.hashCode() * 31 + dayVal * 17 + stepIndex) and 0x7FFFFFFF
+            return ((scheduleId.hashCode() * 31 + dayVal * 17 + stepIndex) and 0x7FFFFFFF)
         }
     }
 
@@ -73,7 +76,6 @@ class AlarmSchedulerImpl @Inject constructor(
             val totalSteps = if (steps.isEmpty()) 1 else steps.size
 
             if (steps.isEmpty()) {
-                // Schedule routine with default step
                 val triggerTime = calculateNextTriggerTime(dayOfWeek, schedule.startHour, schedule.startMinute, 0)
                 scheduleStepAlarm(
                     schedule = schedule,
@@ -84,6 +86,8 @@ class AlarmSchedulerImpl @Inject constructor(
                     stepId = "default",
                     stepName = routineWithDetails.routine.name,
                     nextStepName = null,
+                    isForceful = true,
+                    isCompletion = false,
                     triggerTimeMs = triggerTime
                 )
             } else {
@@ -106,18 +110,41 @@ class AlarmSchedulerImpl @Inject constructor(
                         stepId = step.id,
                         stepName = step.name,
                         nextStepName = nextStepName,
+                        isForceful = step.isForcefulAlarm,
+                        isCompletion = false,
                         triggerTimeMs = triggerTime
                     )
 
                     offsetSeconds += step.totalSeconds
                 }
+
+                // Schedule Final Completion Alarm when the entire routine finishes
+                val completionTriggerTime = calculateNextTriggerTime(
+                    dayOfWeek = dayOfWeek,
+                    hour = schedule.startHour,
+                    minute = schedule.startMinute,
+                    offsetSeconds = offsetSeconds
+                )
+
+                scheduleStepAlarm(
+                    schedule = schedule,
+                    routineWithDetails = routineWithDetails,
+                    dayOfWeek = dayOfWeek,
+                    stepIndex = steps.size,
+                    totalSteps = totalSteps,
+                    stepId = "completion",
+                    stepName = "Routine Finished! 🎉",
+                    nextStepName = null,
+                    isForceful = false, // Gentle completion chime by default
+                    isCompletion = true,
+                    triggerTimeMs = completionTriggerTime
+                )
             }
         }
     }
 
     override suspend fun cancelRoutineSchedule(scheduleId: String) {
         val days = DayOfWeek.entries.toList() + listOf(null)
-        // Check reasonable step range up to 50
         for (day in days) {
             for (stepIndex in 0..50) {
                 val requestCode = generateRequestCode(scheduleId, day, stepIndex)
@@ -160,6 +187,8 @@ class AlarmSchedulerImpl @Inject constructor(
         stepId: String,
         stepName: String,
         nextStepName: String?,
+        isForceful: Boolean,
+        isCompletion: Boolean,
         triggerTimeMs: Long
     ) {
         val requestCode = generateRequestCode(schedule.id, dayOfWeek, stepIndex)
@@ -169,6 +198,7 @@ class AlarmSchedulerImpl @Inject constructor(
             putExtra(EXTRA_SCHEDULE_ID, schedule.id)
             putExtra(EXTRA_ROUTINE_ID, routineWithDetails.routine.id)
             putExtra(EXTRA_ROUTINE_NAME, routineWithDetails.routine.name)
+            putExtra(EXTRA_ROUTINE_ICON, routineWithDetails.routine.icon)
             putExtra(EXTRA_STEP_ID, stepId)
             putExtra(EXTRA_STEP_NAME, stepName)
             putExtra(EXTRA_STEP_INDEX, stepIndex)
@@ -176,6 +206,8 @@ class AlarmSchedulerImpl @Inject constructor(
             putExtra(EXTRA_NEXT_STEP_NAME, nextStepName)
             putExtra(EXTRA_SOUND_ENABLED, schedule.soundEnabled)
             putExtra(EXTRA_VIBRATE_ENABLED, schedule.vibrateEnabled)
+            putExtra(EXTRA_IS_FORCEFUL, isForceful)
+            putExtra(EXTRA_IS_COMPLETION, isCompletion)
             putExtra(EXTRA_DAY_OF_WEEK, dayOfWeek?.name)
         }
 

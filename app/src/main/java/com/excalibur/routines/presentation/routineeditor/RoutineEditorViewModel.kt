@@ -22,6 +22,7 @@ data class RoutineEditorUiState(
     val routineId: String = UUID.randomUUID().toString(),
     val name: String = "",
     val description: String = "",
+    val icon: String = "🦊",
     val steps: List<RoutineStep> = emptyList(),
     val isSaving: Boolean = false,
     val isNew: Boolean = true
@@ -49,6 +50,7 @@ class RoutineEditorViewModel @Inject constructor(
                             routineId = existing.routine.id,
                             name = existing.routine.name,
                             description = existing.routine.description,
+                            icon = existing.routine.icon,
                             steps = existing.steps,
                             isNew = false
                         )
@@ -66,27 +68,33 @@ class RoutineEditorViewModel @Inject constructor(
         _uiState.update { it.copy(description = description) }
     }
 
-    fun addStep(name: String, minutes: Int, seconds: Int) {
+    fun updateIcon(icon: String) {
+        _uiState.update { it.copy(icon = icon) }
+    }
+
+    fun addStep(name: String, minutes: Int, seconds: Int, isForcefulAlarm: Boolean) {
         _uiState.update { current ->
             val newStep = RoutineStep(
                 routineId = current.routineId,
                 name = name.ifBlank { "Step ${current.steps.size + 1}" },
                 orderIndex = current.steps.size,
                 durationMinutes = minutes,
-                durationSeconds = seconds
+                durationSeconds = seconds,
+                isForcefulAlarm = isForcefulAlarm
             )
             current.copy(steps = current.steps + newStep)
         }
     }
 
-    fun updateStep(stepId: String, name: String, minutes: Int, seconds: Int) {
+    fun updateStep(stepId: String, name: String, minutes: Int, seconds: Int, isForcefulAlarm: Boolean) {
         _uiState.update { current ->
             val updated = current.steps.map { step ->
                 if (step.id == stepId) {
                     step.copy(
                         name = name.ifBlank { step.name },
                         durationMinutes = minutes,
-                        durationSeconds = seconds
+                        durationSeconds = seconds,
+                        isForcefulAlarm = isForcefulAlarm
                     )
                 } else {
                     step
@@ -126,7 +134,8 @@ class RoutineEditorViewModel @Inject constructor(
             val routine = Routine(
                 id = current.routineId,
                 name = current.name.trim(),
-                description = current.description.trim()
+                description = current.description.trim(),
+                icon = current.icon
             )
             saveRoutineUseCase(routine, current.steps)
             onSuccess()

@@ -8,7 +8,8 @@ data class RoutineStep(
     val name: String,
     val orderIndex: Int,
     val durationMinutes: Int = 0,
-    val durationSeconds: Int = 0
+    val durationSeconds: Int = 0,
+    val isForcefulAlarm: Boolean = true
 ) {
     val totalSeconds: Int
         get() = (durationMinutes * 60) + durationSeconds

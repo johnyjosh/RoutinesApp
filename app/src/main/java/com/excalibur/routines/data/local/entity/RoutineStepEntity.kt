@@ -24,7 +24,8 @@ data class RoutineStepEntity(
     val name: String,
     val orderIndex: Int,
     val durationMinutes: Int,
-    val durationSeconds: Int
+    val durationSeconds: Int,
+    val isForcefulAlarm: Boolean = true
 ) {
     fun toDomain() = RoutineStep(
         id = id,
@@ -32,7 +33,8 @@ data class RoutineStepEntity(
         name = name,
         orderIndex = orderIndex,
         durationMinutes = durationMinutes,
-        durationSeconds = durationSeconds
+        durationSeconds = durationSeconds,
+        isForcefulAlarm = isForcefulAlarm
     )
 
     companion object {
@@ -42,7 +44,8 @@ data class RoutineStepEntity(
             name = step.name,
             orderIndex = step.orderIndex,
             durationMinutes = step.durationMinutes,
-            durationSeconds = step.durationSeconds
+            durationSeconds = step.durationSeconds,
+            isForcefulAlarm = step.isForcefulAlarm
         )
     }
 }

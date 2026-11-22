@@ -3,6 +3,7 @@ package com.excalibur.routines.presentation.routinelist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.excalibur.routines.domain.model.Routine
+import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
 import com.excalibur.routines.domain.usecase.DeleteRoutineUseCase
 import com.excalibur.routines.domain.usecase.DeleteScheduleUseCase
@@ -64,7 +65,8 @@ class RoutineListViewModel @Inject constructor(
             val duplicatedRoutine = Routine(
                 id = UUID.randomUUID().toString(),
                 name = "${original.name} (Copy)",
-                description = original.description
+                description = original.description,
+                icon = original.icon
             )
             val duplicatedSteps = routineWithDetails.steps.map { step ->
                 step.copy(
@@ -73,6 +75,27 @@ class RoutineListViewModel @Inject constructor(
                 )
             }
             saveRoutineUseCase(duplicatedRoutine, duplicatedSteps)
+        }
+    }
+
+    fun createStarterTemplate(name: String, icon: String, steps: List<Pair<String, Int>>) {
+        viewModelScope.launch {
+            val routine = Routine(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                icon = icon
+            )
+            val stepList = steps.mapIndexed { index, (stepName, mins) ->
+                RoutineStep(
+                    routineId = routine.id,
+                    name = stepName,
+                    orderIndex = index,
+                    durationMinutes = mins,
+                    durationSeconds = 0,
+                    isForcefulAlarm = (index == 0) // First step forceful alarm, subsequent steps chime
+                )
+            }
+            saveRoutineUseCase(routine, stepList)
         }
     }
 }

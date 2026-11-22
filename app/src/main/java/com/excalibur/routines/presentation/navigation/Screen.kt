@@ -11,4 +11,7 @@ sealed interface Screen {
 
     @Serializable
     data class ScheduleEditor(val routineId: String, val scheduleId: String? = null) : Screen
+
+    @Serializable
+    data class ActiveSession(val routineId: String) : Screen
 }
