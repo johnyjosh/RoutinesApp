@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
@@ -53,6 +54,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -94,6 +97,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -358,20 +362,6 @@ fun RoutineCard(
     onToggleSchedule: (String, Boolean) -> Unit,
     onDeleteSchedule: (String) -> Unit
 ) {
-    var isCopying by remember { mutableStateOf(false) }
-    val copyScale by animateFloatAsState(
-        targetValue = if (isCopying) 1.35f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "copyScale"
-    )
-
-    LaunchedEffect(isCopying) {
-        if (isCopying) {
-            delay(700)
-            isCopying = false
-        }
-    }
-
     // Dynamic Estimated Finish Time
     val estimatedFinishTime = remember(routineWithDetails.totalDurationSeconds) {
         val finishTime = LocalTime.now().plusSeconds(routineWithDetails.totalDurationSeconds.toLong())
@@ -400,127 +390,136 @@ fun RoutineCard(
         )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            // Header: Animal Avatar, Title, Duration Badge & Action Buttons
+            // Header: Animal Avatar, Title, Duration Badge, Options Menu & Chevron
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
+                    Text(text = if (isEditing) editingIcon else routineWithDetails.routine.icon, fontSize = 24.sp)
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isEditing) editingName else routineWithDetails.routine.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(text = if (isEditing) editingIcon else routineWithDetails.routine.icon, fontSize = 28.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    Column {
-                        Text(
-                            text = if (isEditing) editingName else routineWithDetails.routine.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    text = routineWithDetails.formattedTotalDuration,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
                             Text(
-                                text = "🏁 Finish ~$estimatedFinishTime",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
+                                text = routineWithDetails.formattedTotalDuration,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
+                        Text(
+                            text = "• ${routineWithDetails.steps.size} steps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = "• 🏁 $estimatedFinishTime",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
 
-                Row {
-                    IconButton(
-                        onClick = {
-                            isCopying = true
-                            onDuplicate()
-                        }
+                // 3-dot overflow options menu (Duplicate, Delete)
+                var showOptionsMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { showOptionsMenu = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "Options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showOptionsMenu,
+                        onDismissRequest = { showOptionsMenu = false }
                     ) {
-                        Icon(
-                            imageVector = if (isCopying) Icons.Default.Check else Icons.Default.ContentCopy,
-                            contentDescription = "Duplicate",
-                            tint = if (isCopying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .scale(copyScale)
+                        DropdownMenuItem(
+                            text = { Text("Duplicate Routine") },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                            onClick = {
+                                showOptionsMenu = false
+                                onDuplicate()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete Routine", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Default.DeleteOutline, null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showOptionsMenu = false
+                                onDelete()
+                            }
                         )
                     }
-                    IconButton(onClick = onToggleEdit) {
-                        Icon(
-                            imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
-                            contentDescription = if (isEditing) "Done" else "Edit",
-                            tint = if (isEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(20.dp))
-                    }
+                }
+
+                // Expand / Collapse Chevron
+                IconButton(onClick = onToggleEdit) {
+                    Icon(
+                        imageVector = if (isEditing) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isEditing) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
-            // Quick Run Button & Accordion Toggle Row
-            Spacer(modifier = Modifier.height(14.dp))
+            // Quick Run & Edit Steps Action Row
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // "Start Routine" Button
                 FilledTonalButton(
                     onClick = onStart,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Start Routine", fontWeight = FontWeight.Bold)
                 }
 
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onToggleEdit() }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                OutlinedButton(
+                    onClick = onToggleEdit,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = if (isEditing) "Close editor" else "${routineWithDetails.steps.size} steps • Edit",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
                     Icon(
-                        imageVector = if (isEditing) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (isEditing) "Done" else "Edit Steps", fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -892,6 +891,8 @@ fun InlineStepAccordionItem(
                         text = "${index + 1}. ${step.name}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                 }
