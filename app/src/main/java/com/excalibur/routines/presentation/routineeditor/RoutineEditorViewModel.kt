@@ -117,6 +117,16 @@ class RoutineEditorViewModel @Inject constructor(
         }
     }
 
+    fun insertStep(step: RoutineStep, atIndex: Int) {
+        _uiState.update { current ->
+            val mutableList = current.steps.toMutableList()
+            val safeIndex = atIndex.coerceIn(0, mutableList.size)
+            mutableList.add(safeIndex, step)
+            val updated = mutableList.mapIndexed { index, s -> s.copy(orderIndex = index) }
+            current.copy(steps = updated)
+        }
+    }
+
     fun moveStep(fromIndex: Int, toIndex: Int) {
         _uiState.update { current ->
             if (fromIndex !in current.steps.indices || toIndex !in current.steps.indices) {

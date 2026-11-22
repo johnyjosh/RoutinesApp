@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +27,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Remove
@@ -38,7 +38,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -46,6 +45,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,13 +56,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -67,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.RoutineAvatar
 import com.excalibur.routines.domain.model.RoutineStep
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +83,8 @@ fun RoutineEditorScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     var expandedStepId by remember { mutableStateOf<String?>(null) }
 
     // Auto-save on system back gesture
@@ -107,7 +117,8 @@ fun RoutineEditorScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -263,7 +274,19 @@ fun RoutineEditorScreen(
                         onMoveDown = { viewModel.moveStep(index, index + 1) },
                         onRemove = {
                             if (expandedStepId == step.id) expandedStepId = null
-                            viewModel.removeStep(step.id)
+                            val removedStep = step
+                            val originalIndex = index
+                            viewModel.removeStep(removedStep.id)
+                            coroutineScope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "'${removedStep.name}' deleted",
+                                    actionLabel = "Undo",
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.insertStep(removedStep, originalIndex)
+                                }
+                            }
                         }
                     )
                 }
@@ -285,6 +308,9 @@ fun InlineStepCard(
     onRemove: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    val dragThresholdPx = with(density) { 56.dp.toPx() }
 
     Card(
         modifier = Modifier
@@ -303,7 +329,7 @@ fun InlineStepCard(
                 .fillMaxWidth()
                 .padding(14.dp)
         ) {
-            // Header Row: Summary & Expand Toggle
+            // Header Row: Grab Handle, Summary, & Expand Chevron
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -315,6 +341,41 @@ fun InlineStepCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Grab Bar for Tactile Drag Reordering
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(36.dp)
+                            .pointerInput(index, totalSteps) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragAccumulator = 0f
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragAccumulator += dragAmount.y
+                                        if (dragAccumulator > dragThresholdPx && index < totalSteps - 1) {
+                                            onMoveDown()
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            dragAccumulator = 0f
+                                        } else if (dragAccumulator < -dragThresholdPx && index > 0) {
+                                            onMoveUp()
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            dragAccumulator = 0f
+                                        }
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Hold and drag to reorder",
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .size(28.dp)
@@ -365,35 +426,19 @@ fun InlineStepCard(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onMoveUp,
-                        enabled = index > 0,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(
-                        onClick = onMoveDown,
-                        enabled = index < totalSteps - 1,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
-                    }
-                    IconButton(
-                        onClick = onToggleExpand,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                IconButton(
+                    onClick = onToggleExpand,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 
-            // Expanded Inline Controls
+            // Expanded Inline Controls (Auto-saves continuously)
             if (isExpanded) {
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -548,10 +593,10 @@ fun InlineStepCard(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Bottom Actions: Remove and Done
+                // Bottom Action: Delete Step with Undo Support
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
@@ -563,13 +608,6 @@ fun InlineStepCard(
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Delete Step")
-                    }
-
-                    FilledTonalButton(
-                        onClick = onToggleExpand,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Done")
                     }
                 }
             }
