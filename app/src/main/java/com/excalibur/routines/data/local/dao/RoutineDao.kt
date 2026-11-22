@@ -13,8 +13,12 @@ import kotlinx.coroutines.flow.Flow
 interface RoutineDao {
 
     @Transaction
-    @Query("SELECT * FROM routines ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM routines WHERE isArchived = 0 ORDER BY updatedAt DESC")
     fun getAllRoutinesWithDetails(): Flow<List<RoutineWithDetailsRelation>>
+
+    @Transaction
+    @Query("SELECT * FROM routines WHERE isArchived = 1 ORDER BY archivedAt DESC")
+    fun getArchivedRoutinesWithDetails(): Flow<List<RoutineWithDetailsRelation>>
 
     @Transaction
     @Query("SELECT * FROM routines WHERE id = :routineId")
@@ -41,6 +45,15 @@ interface RoutineDao {
             upsertSteps(steps)
         }
     }
+
+    @Query("UPDATE routines SET isArchived = 1, archivedAt = :archivedAt WHERE id = :routineId")
+    suspend fun archiveRoutine(routineId: String, archivedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE routines SET isArchived = 0, archivedAt = NULL WHERE id = :routineId")
+    suspend fun restoreRoutine(routineId: String)
+
+    @Query("DELETE FROM routines WHERE isArchived = 1 AND archivedAt < :thresholdTime")
+    suspend fun purgeExpiredArchivedRoutines(thresholdTime: Long)
 
     @Query("DELETE FROM routines WHERE id = :routineId")
     suspend fun deleteRoutine(routineId: String)

@@ -5,15 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.excalibur.routines.domain.model.Routine
 import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
+import com.excalibur.routines.domain.repository.RoutineRepository
 import com.excalibur.routines.domain.usecase.DeleteRoutineUseCase
 import com.excalibur.routines.domain.usecase.DeleteScheduleUseCase
 import com.excalibur.routines.domain.usecase.GetRoutinesUseCase
+import com.excalibur.routines.domain.usecase.RestoreRoutineUseCase
 import com.excalibur.routines.domain.usecase.SaveRoutineUseCase
 import com.excalibur.routines.domain.usecase.ToggleScheduleUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -21,25 +23,42 @@ import javax.inject.Inject
 
 data class RoutineListUiState(
     val routines: List<RoutineWithDetails> = emptyList(),
+    val archivedRoutines: List<RoutineWithDetails> = emptyList(),
     val isLoading: Boolean = false
 )
 
 @HiltViewModel
 class RoutineListViewModel @Inject constructor(
     getRoutinesUseCase: GetRoutinesUseCase,
+    private val routineRepository: RoutineRepository,
     private val saveRoutineUseCase: SaveRoutineUseCase,
     private val deleteRoutineUseCase: DeleteRoutineUseCase,
+    private val restoreRoutineUseCase: RestoreRoutineUseCase,
     private val toggleScheduleUseCase: ToggleScheduleUseCase,
     private val deleteScheduleUseCase: DeleteScheduleUseCase
 ) : ViewModel() {
 
-    val uiState: StateFlow<RoutineListUiState> = getRoutinesUseCase()
-        .map { RoutineListUiState(routines = it, isLoading = false) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = RoutineListUiState(isLoading = true)
+    init {
+        // Auto-purge any routines that have been in the trash for over 30 days
+        viewModelScope.launch {
+            routineRepository.purgeExpiredRoutines(daysOld = 30)
+        }
+    }
+
+    val uiState: StateFlow<RoutineListUiState> = combine(
+        getRoutinesUseCase(),
+        routineRepository.getArchivedRoutinesWithDetails()
+    ) { activeRoutines, archivedRoutines ->
+        RoutineListUiState(
+            routines = activeRoutines,
+            archivedRoutines = archivedRoutines,
+            isLoading = false
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = RoutineListUiState(isLoading = true)
+    )
 
     fun toggleSchedule(scheduleId: String, isEnabled: Boolean) {
         viewModelScope.launch {
@@ -50,6 +69,18 @@ class RoutineListViewModel @Inject constructor(
     fun deleteRoutine(routineId: String) {
         viewModelScope.launch {
             deleteRoutineUseCase(routineId)
+        }
+    }
+
+    fun restoreRoutine(routineId: String) {
+        viewModelScope.launch {
+            restoreRoutineUseCase(routineId)
+        }
+    }
+
+    fun permanentlyDeleteRoutine(routineId: String) {
+        viewModelScope.launch {
+            routineRepository.permanentlyDeleteRoutine(routineId)
         }
     }
 

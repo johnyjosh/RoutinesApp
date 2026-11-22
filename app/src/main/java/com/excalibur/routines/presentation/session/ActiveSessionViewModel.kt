@@ -29,7 +29,9 @@ data class ActiveSessionUiState(
     val isPaused: Boolean = false,
     val isFinished: Boolean = false,
     val keepScreenOn: Boolean = true,
-    val voiceCuesEnabled: Boolean = true
+    val voiceCuesEnabled: Boolean = true,
+    val isBonusLounge: Boolean = false,
+    val activeGameType: MiniGameType = MiniGameType.BERRY_CATCH
 ) {
     val currentStep: RoutineStep?
         get() = steps.getOrNull(currentStepIndex)
@@ -125,18 +127,39 @@ class ActiveSessionViewModel @Inject constructor(
                 it.copy(
                     currentStepIndex = nextIndex,
                     remainingSecondsInStep = nextStep.totalSeconds,
-                    totalSecondsInStep = nextStep.totalSeconds
+                    totalSecondsInStep = nextStep.totalSeconds,
+                    isBonusLounge = false
                 )
             }
             announceStep(nextStep, isFirst = false)
         } else {
             // Entire routine finished!
-            _uiState.update { it.copy(isFinished = true, remainingSecondsInStep = 0) }
+            _uiState.update { it.copy(isFinished = true, remainingSecondsInStep = 0, isBonusLounge = false) }
             if (current.voiceCuesEnabled) {
                 voiceAnnouncer.speak("Routine complete! Great job!")
             }
             timerJob?.cancel()
         }
+    }
+
+    fun enterBonusLounge() {
+        val randomGame = MiniGameType.entries.random()
+        _uiState.update { it.copy(isBonusLounge = true, activeGameType = randomGame) }
+        if (_uiState.value.voiceCuesEnabled) {
+            voiceAnnouncer.speak("You finished early! Enjoy your bonus time.")
+        }
+    }
+
+    fun switchGame() {
+        _uiState.update { current ->
+            val currentIndex = MiniGameType.entries.indexOf(current.activeGameType)
+            val nextIndex = (currentIndex + 1) % MiniGameType.entries.size
+            current.copy(activeGameType = MiniGameType.entries[nextIndex])
+        }
+    }
+
+    fun exitBonusLoungeAndAdvance() {
+        advanceToNextStep()
     }
 
     fun togglePauseResume() {

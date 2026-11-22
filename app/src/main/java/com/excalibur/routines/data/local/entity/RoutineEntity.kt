@@ -10,6 +10,8 @@ data class RoutineEntity(
     val name: String,
     val description: String,
     val icon: String = "🦊",
+    val isArchived: Boolean = false,
+    val archivedAt: Long? = null,
     val createdAt: Long,
     val updatedAt: Long
 ) {
@@ -18,6 +20,8 @@ data class RoutineEntity(
         name = name,
         description = description,
         icon = icon,
+        isArchived = isArchived,
+        archivedAt = archivedAt,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
@@ -28,6 +32,8 @@ data class RoutineEntity(
             name = routine.name,
             description = routine.description,
             icon = routine.icon,
+            isArchived = routine.isArchived,
+            archivedAt = routine.archivedAt,
             createdAt = routine.createdAt,
             updatedAt = routine.updatedAt
         )

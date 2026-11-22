@@ -7,8 +7,12 @@ import kotlinx.coroutines.flow.Flow
 
 interface RoutineRepository {
     fun getAllRoutinesWithDetails(): Flow<List<RoutineWithDetails>>
+    fun getArchivedRoutinesWithDetails(): Flow<List<RoutineWithDetails>>
     fun getRoutineWithDetails(routineId: String): Flow<RoutineWithDetails?>
     suspend fun getRoutineWithDetailsOnce(routineId: String): RoutineWithDetails?
     suspend fun saveRoutine(routine: Routine, steps: List<RoutineStep>)
-    suspend fun deleteRoutine(routineId: String)
+    suspend fun archiveRoutine(routineId: String)
+    suspend fun restoreRoutine(routineId: String)
+    suspend fun permanentlyDeleteRoutine(routineId: String)
+    suspend fun purgeExpiredRoutines(daysOld: Int = 30)
 }

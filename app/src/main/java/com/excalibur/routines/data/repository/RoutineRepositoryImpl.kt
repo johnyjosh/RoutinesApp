@@ -23,6 +23,12 @@ class RoutineRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun getArchivedRoutinesWithDetails(): Flow<List<RoutineWithDetails>> {
+        return routineDao.getArchivedRoutinesWithDetails().map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
     override fun getRoutineWithDetails(routineId: String): Flow<RoutineWithDetails?> {
         return routineDao.getRoutineWithDetails(routineId).map { it?.toDomain() }
     }
@@ -39,7 +45,20 @@ class RoutineRepositoryImpl @Inject constructor(
         routineDao.saveRoutineWithSteps(routineEntity, stepEntities)
     }
 
-    override suspend fun deleteRoutine(routineId: String) {
+    override suspend fun archiveRoutine(routineId: String) {
+        routineDao.archiveRoutine(routineId, System.currentTimeMillis())
+    }
+
+    override suspend fun restoreRoutine(routineId: String) {
+        routineDao.restoreRoutine(routineId)
+    }
+
+    override suspend fun permanentlyDeleteRoutine(routineId: String) {
         routineDao.deleteRoutine(routineId)
+    }
+
+    override suspend fun purgeExpiredRoutines(daysOld: Int) {
+        val thresholdMillis = System.currentTimeMillis() - (daysOld.toLong() * 24L * 60L * 60L * 1000L)
+        routineDao.purgeExpiredArchivedRoutines(thresholdMillis)
     }
 }

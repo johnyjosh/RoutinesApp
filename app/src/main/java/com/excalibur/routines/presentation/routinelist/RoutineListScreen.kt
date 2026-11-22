@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -54,6 +60,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.RoutineSchedule
 import com.excalibur.routines.domain.model.RoutineWithDetails
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +83,10 @@ fun RoutineListScreen(
     onStartRoutine: (routineId: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
     var routineToDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
+    var routineToPermanentlyDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
 
     Scaffold(
         topBar = {
@@ -88,6 +99,7 @@ fun RoutineListScreen(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onCreateRoutine,
@@ -109,7 +121,7 @@ fun RoutineListScreen(
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
-                uiState.routines.isEmpty() -> {
+                uiState.routines.isEmpty() && uiState.archivedRoutines.isEmpty() -> {
                     EmptyRoutinesState(
                         onCreateRoutine = onCreateRoutine,
                         onSelectTemplate = { name, icon, steps ->
@@ -125,24 +137,53 @@ fun RoutineListScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(uiState.routines, key = { it.routine.id }) { routineWithDetails ->
-                            RoutineCard(
-                                routineWithDetails = routineWithDetails,
-                                onStart = { onStartRoutine(routineWithDetails.routine.id) },
-                                onEdit = { onEditRoutine(routineWithDetails.routine.id) },
-                                onDuplicate = { viewModel.duplicateRoutine(routineWithDetails) },
-                                onDelete = { routineToDelete = routineWithDetails },
-                                onAddSchedule = { onAddSchedule(routineWithDetails.routine.id) },
-                                onEditSchedule = { scheduleId ->
-                                    onEditSchedule(routineWithDetails.routine.id, scheduleId)
-                                },
-                                onToggleSchedule = { scheduleId, enabled ->
-                                    viewModel.toggleSchedule(scheduleId, enabled)
-                                },
-                                onDeleteSchedule = { scheduleId ->
-                                    viewModel.deleteSchedule(scheduleId)
-                                }
-                            )
+                        if (uiState.routines.isEmpty()) {
+                            item {
+                                EmptyRoutinesState(
+                                    onCreateRoutine = onCreateRoutine,
+                                    onSelectTemplate = { name, icon, steps ->
+                                        viewModel.createStarterTemplate(name, icon, steps)
+                                    }
+                                )
+                            }
+                        } else {
+                            items(uiState.routines, key = { it.routine.id }) { routineWithDetails ->
+                                RoutineCard(
+                                    routineWithDetails = routineWithDetails,
+                                    onStart = { onStartRoutine(routineWithDetails.routine.id) },
+                                    onEdit = { onEditRoutine(routineWithDetails.routine.id) },
+                                    onDuplicate = { viewModel.duplicateRoutine(routineWithDetails) },
+                                    onDelete = { routineToDelete = routineWithDetails },
+                                    onAddSchedule = { onAddSchedule(routineWithDetails.routine.id) },
+                                    onEditSchedule = { scheduleId ->
+                                        onEditSchedule(routineWithDetails.routine.id, scheduleId)
+                                    },
+                                    onToggleSchedule = { scheduleId, enabled ->
+                                        viewModel.toggleSchedule(scheduleId, enabled)
+                                    },
+                                    onDeleteSchedule = { scheduleId ->
+                                        viewModel.deleteSchedule(scheduleId)
+                                    }
+                                )
+                            }
+                        }
+
+                        if (uiState.archivedRoutines.isNotEmpty()) {
+                            item {
+                                TrashSection(
+                                    archivedRoutines = uiState.archivedRoutines,
+                                    onRestore = { item ->
+                                        viewModel.restoreRoutine(item.routine.id)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                message = "'${item.routine.name}' restored",
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        }
+                                    },
+                                    onPermanentlyDelete = { routineToPermanentlyDelete = it }
+                                )
+                            }
                         }
                     }
                 }
@@ -153,20 +194,55 @@ fun RoutineListScreen(
     routineToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { routineToDelete = null },
-            title = { Text("Delete Routine?") },
-            text = { Text("Are you sure you want to delete '${item.routine.icon} ${item.routine.name}'? All scheduled alarms for this routine will be canceled.") },
+            title = { Text("Move to Trash?") },
+            text = { Text("Move '${item.routine.icon} ${item.routine.name}' to Trash? You can restore it anytime within 30 days before it is permanently deleted.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.deleteRoutine(item.routine.id)
+                        val toDelete = item
+                        viewModel.deleteRoutine(toDelete.routine.id)
                         routineToDelete = null
+                        coroutineScope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "'${toDelete.routine.name}' moved to Trash",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                viewModel.restoreRoutine(toDelete.routine.id)
+                            }
+                        }
                     }
                 ) {
-                    Text("Delete")
+                    Text("Move to Trash")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { routineToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    routineToPermanentlyDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { routineToPermanentlyDelete = null },
+            title = { Text("Delete Forever?") },
+            text = { Text("Permanently delete '${item.routine.icon} ${item.routine.name}'? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeleteRoutine(item.routine.id)
+                        routineToPermanentlyDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete Forever")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { routineToPermanentlyDelete = null }) {
                     Text("Cancel")
                 }
             }
@@ -583,6 +659,141 @@ fun StarterTemplateCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(text = steps, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            }
+        }
+    }
+}
+
+@Composable
+fun TrashSection(
+    archivedRoutines: List<RoutineWithDetails>,
+    onRestore: (RoutineWithDetails) -> Unit,
+    onPermanentlyDelete: (RoutineWithDetails) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "Trash (${archivedRoutines.size})",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Auto-purges routines after 30 days",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                IconButton(onClick = { isExpanded = !isExpanded }) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand"
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    archivedRoutines.forEach { item ->
+                        val routine = item.routine
+                        val archivedMillis = routine.archivedAt ?: System.currentTimeMillis()
+                        val daysSinceArchived = ((System.currentTimeMillis() - archivedMillis) / (1000 * 60 * 60 * 24)).toInt().coerceAtLeast(0)
+                        val daysRemaining = (30 - daysSinceArchived).coerceAtLeast(0)
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(text = routine.icon, fontSize = 24.sp)
+                                    Column {
+                                        Text(
+                                            text = routine.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "${item.steps.size} steps • ${daysRemaining}d left",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(onClick = { onRestore(item) }) {
+                                        Text("Restore")
+                                    }
+                                    IconButton(onClick = { onPermanentlyDelete(item) }) {
+                                        Icon(
+                                            Icons.Default.DeleteForever,
+                                            contentDescription = "Delete Forever",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

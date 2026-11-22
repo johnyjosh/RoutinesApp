@@ -15,6 +15,6 @@ class DeleteRoutineUseCase @Inject constructor(
                 alarmScheduler.cancelRoutineSchedule(schedule.id)
             }
         }
-        routineRepository.deleteRoutine(routineId)
+        routineRepository.archiveRoutine(routineId)
     }
 }

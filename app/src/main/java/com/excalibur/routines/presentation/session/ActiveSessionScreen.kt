@@ -25,13 +25,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Casino
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,6 +67,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.excalibur.routines.presentation.session.minigames.BerryCatchGame
+import com.excalibur.routines.presentation.session.minigames.MemoryMatchGame
+import com.excalibur.routines.presentation.session.minigames.ZenBloomGame
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +104,17 @@ fun ActiveSessionScreen(
         return
     }
 
-    Scaffold(
+    if (uiState.isBonusLounge) {
+        BonusLoungeView(
+            uiState = uiState,
+            onExit = { showExitDialog = true },
+            onSwitchGame = viewModel::switchGame,
+            onNextStep = viewModel::exitBonusLoungeAndAdvance,
+            onToggleVoiceCues = viewModel::toggleVoiceCues,
+            onToggleKeepScreenOn = viewModel::toggleKeepScreenOn
+        )
+    } else {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -297,41 +314,71 @@ fun ActiveSessionScreen(
             }
 
             // Bottom Action Controls
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 8.dp)
             ) {
-                OutlinedButton(
-                    onClick = viewModel::skipStep,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Skip Step")
+                if (uiState.remainingSecondsInStep > 5) {
+                    Button(
+                        onClick = viewModel::enterBonusLounge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Icon(
+                            Icons.Default.Celebration,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "✨ Finished Early! (+${uiState.formattedRemainingTime} Bonus)",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondary
+                        )
+                    }
                 }
 
-                Button(
-                    onClick = viewModel::togglePauseResume,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (uiState.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = null
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (uiState.isPaused) "Resume" else "Pause")
+                    OutlinedButton(
+                        onClick = viewModel::skipStep,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.SkipNext, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Skip Step")
+                    }
+
+                    Button(
+                        onClick = viewModel::togglePauseResume,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (uiState.isPaused) "Resume" else "Pause")
+                    }
                 }
             }
         }
+    }
     }
 
     if (showExitDialog) {
@@ -409,6 +456,152 @@ fun RoutineCelebrationView(
             shape = RoundedCornerShape(16.dp)
         ) {
             Text("Done! Return to Routines", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BonusLoungeView(
+    uiState: ActiveSessionUiState,
+    onExit: () -> Unit,
+    onSwitchGame: () -> Unit,
+    onNextStep: () -> Unit,
+    onToggleVoiceCues: () -> Unit,
+    onToggleKeepScreenOn: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "🎉 Bonus Lounge",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Bonus Time: ${uiState.formattedRemainingTime}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onExit) {
+                        Icon(Icons.Default.Close, contentDescription = "Exit Routine")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onSwitchGame) {
+                        Icon(
+                            Icons.Default.Casino,
+                            contentDescription = "Switch Mini-Game",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onToggleVoiceCues) {
+                        Icon(
+                            imageVector = if (uiState.voiceCuesEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = if (uiState.voiceCuesEnabled) "Mute Voice Cues" else "Enable Voice Cues",
+                            tint = if (uiState.voiceCuesEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    IconButton(onClick = onToggleKeepScreenOn) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = "Keep Screen On",
+                            tint = if (uiState.keepScreenOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .safeDrawingPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Finished early! Play while timer runs ✨",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = when (uiState.activeGameType) {
+                            MiniGameType.BERRY_CATCH -> "Berry Catch 🫐"
+                            MiniGameType.MEMORY_MATCH -> "Brain Spark 🧠"
+                            MiniGameType.ZEN_BLOOM -> "Zen Bloom 🌸"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when (uiState.activeGameType) {
+                    MiniGameType.BERRY_CATCH -> BerryCatchGame(companionIcon = uiState.routine?.icon ?: "🦊")
+                    MiniGameType.MEMORY_MATCH -> MemoryMatchGame()
+                    MiniGameType.ZEN_BLOOM -> ZenBloomGame()
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onSwitchGame,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Next Game 🎲")
+                }
+
+                Button(
+                    onClick = onNextStep,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Next Step ⏭️", fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
