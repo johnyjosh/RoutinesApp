@@ -5,10 +5,13 @@ import androidx.room.Room
 import com.excalibur.routines.data.local.RoutinesDatabase
 import com.excalibur.routines.data.local.dao.RoutineDao
 import com.excalibur.routines.data.local.dao.ScheduleDao
+import com.excalibur.routines.data.local.dao.UserStatsDao
 import com.excalibur.routines.data.repository.RoutineRepositoryImpl
 import com.excalibur.routines.data.repository.ScheduleRepositoryImpl
+import com.excalibur.routines.data.repository.UserStatsRepositoryImpl
 import com.excalibur.routines.domain.repository.RoutineRepository
 import com.excalibur.routines.domain.repository.ScheduleRepository
+import com.excalibur.routines.domain.repository.UserStatsRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -42,6 +45,11 @@ object DatabaseModule {
     fun provideScheduleDao(database: RoutinesDatabase): ScheduleDao {
         return database.scheduleDao()
     }
+
+    @Provides
+    fun provideUserStatsDao(database: RoutinesDatabase): UserStatsDao {
+        return database.userStatsDao()
+    }
 }
 
 @Module
@@ -59,4 +67,10 @@ abstract class RepositoryModule {
     abstract fun bindScheduleRepository(
         impl: ScheduleRepositoryImpl
     ): ScheduleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserStatsRepository(
+        impl: UserStatsRepositoryImpl
+    ): UserStatsRepository
 }

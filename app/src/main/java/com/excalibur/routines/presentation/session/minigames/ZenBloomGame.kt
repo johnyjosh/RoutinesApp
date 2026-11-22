@@ -55,6 +55,7 @@ data class ZenSpark(
 
 @Composable
 fun ZenBloomGame(
+    onScoreEarned: (points: Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var completedCycles by remember { mutableIntStateOf(0) }
@@ -101,6 +102,7 @@ fun ZenBloomGame(
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             delay(4000L)
             completedCycles++
+            onScoreEarned(15)
         }
     }
 
@@ -221,6 +223,7 @@ fun ZenBloomGame(
                         .clickable {
                             zenRipplesTapped++
                             floatingSparks.remove(spark)
+                            onScoreEarned(10)
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
                     contentAlignment = Alignment.Center

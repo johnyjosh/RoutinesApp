@@ -47,6 +47,7 @@ data class MemoryCard(
 
 @Composable
 fun MemoryMatchGame(
+    onScoreEarned: (points: Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val emojis = remember { listOf("🦊", "🐻", "🐱", "🦁", "🐼", "🐨") }
@@ -86,10 +87,12 @@ fun MemoryMatchGame(
                 cards[selectedIndices[1]] = second.copy(isMatched = true, isFaceUp = true)
                 matchesFound++
                 score += 20
+                onScoreEarned(20)
                 selectedIndices = emptyList()
 
                 if (matchesFound == 6) {
                     score += 50
+                    onScoreEarned(50)
                     delay(1200L)
                     resetDeck()
                 }

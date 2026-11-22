@@ -50,6 +50,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -81,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.excalibur.routines.domain.model.RoutineSchedule
 import com.excalibur.routines.domain.model.RoutineWithDetails
+import com.excalibur.routines.domain.model.UserStats
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -101,6 +103,7 @@ fun RoutineListScreen(
     val hapticFeedback = LocalHapticFeedback.current
     var routineToDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
     var routineToPermanentlyDelete by remember { mutableStateOf<RoutineWithDetails?>(null) }
+    var showStatsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -136,13 +139,24 @@ fun RoutineListScreen(
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 uiState.routines.isEmpty() && uiState.archivedRoutines.isEmpty() -> {
-                    EmptyRoutinesState(
-                        onCreateRoutine = onCreateRoutine,
-                        onSelectTemplate = { name, icon, steps ->
-                            viewModel.createStarterTemplate(name, icon, steps)
-                        },
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        UserGamificationCard(
+                            userStats = uiState.userStats,
+                            onClick = { showStatsDialog = true }
+                        )
+                        EmptyRoutinesState(
+                            onCreateRoutine = onCreateRoutine,
+                            onSelectTemplate = { name, icon, steps ->
+                                viewModel.createStarterTemplate(name, icon, steps)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
                 else -> {
                     LazyColumn(
@@ -152,6 +166,13 @@ fun RoutineListScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        item(key = "gamification_header") {
+                            UserGamificationCard(
+                                userStats = uiState.userStats,
+                                onClick = { showStatsDialog = true }
+                            )
+                        }
+
                         if (uiState.routines.isEmpty()) {
                             item {
                                 EmptyRoutinesState(
@@ -279,6 +300,13 @@ fun RoutineListScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showStatsDialog) {
+        StatsBreakdownDialog(
+            userStats = uiState.userStats,
+            onDismiss = { showStatsDialog = false }
         )
     }
 }
@@ -872,3 +900,205 @@ fun TrashSection(
         }
     }
 }
+
+@Composable
+fun UserGamificationCard(
+    userStats: UserStats,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⭐", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Level ${userStats.level} • ${userStats.levelTitle}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🔥", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${userStats.currentStreak} Day Streak",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column {
+                    Text(
+                        text = "TOTAL POINTS",
+                        style = MaterialTheme.typography.labelSmall,
+                        letterSpacing = 1.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${userStats.totalPoints} pts",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Text(
+                    text = "${userStats.pointsToNextLevel} pts to next level",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LinearProgressIndicator(
+                progress = { userStats.levelProgressFraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun StatsBreakdownDialog(
+    userStats: UserStats,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🏆", fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Lifetime Stats & Streaks", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("⭐ Total Points", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${userStats.totalPoints} pts",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("🔥 Current Streak", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${userStats.currentStreak} days",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("⚡ Best Streak", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${userStats.bestStreak} days",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("✅ Routines Completed", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "${userStats.routinesCompletedCount}",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "How Points Work:",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "• +10 pts for each step you complete\n" +
+                            "• +50 pts for finishing early & visiting Bonus Lounge\n" +
+                            "• +10-20 pts for catching treats & mini-games\n" +
+                            "• +100 pts for completing an entire routine\n\n" +
+                            "Complete at least one routine every day to keep your streak burning!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Got it! 🚀")
+            }
+        }
+    )
+}
+

@@ -53,6 +53,7 @@ data class FallingTreat(
 @Composable
 fun BerryCatchGame(
     companionIcon: String = "🦊",
+    onScoreEarned: (points: Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var score by remember { mutableIntStateOf(0) }
@@ -99,6 +100,7 @@ fun BerryCatchGame(
                     if (nextY in 0.80f..0.91f && abs(treat.xFraction - basketX) < 0.16f) {
                         score += 10
                         caughtCount++
+                        onScoreEarned(10)
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     } else if (nextY <= 1.05f) {
                         updatedTreats.add(treat.copy(yFraction = nextY))

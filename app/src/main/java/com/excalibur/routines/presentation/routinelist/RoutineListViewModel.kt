@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.excalibur.routines.domain.model.Routine
 import com.excalibur.routines.domain.model.RoutineStep
 import com.excalibur.routines.domain.model.RoutineWithDetails
+import com.excalibur.routines.domain.model.UserStats
 import com.excalibur.routines.domain.repository.RoutineRepository
+import com.excalibur.routines.domain.repository.UserStatsRepository
 import com.excalibur.routines.domain.usecase.DeleteRoutineUseCase
 import com.excalibur.routines.domain.usecase.DeleteScheduleUseCase
 import com.excalibur.routines.domain.usecase.GetRoutinesUseCase
@@ -24,6 +26,7 @@ import javax.inject.Inject
 data class RoutineListUiState(
     val routines: List<RoutineWithDetails> = emptyList(),
     val archivedRoutines: List<RoutineWithDetails> = emptyList(),
+    val userStats: UserStats = UserStats(),
     val isLoading: Boolean = false
 )
 
@@ -31,6 +34,7 @@ data class RoutineListUiState(
 class RoutineListViewModel @Inject constructor(
     getRoutinesUseCase: GetRoutinesUseCase,
     private val routineRepository: RoutineRepository,
+    private val userStatsRepository: UserStatsRepository,
     private val saveRoutineUseCase: SaveRoutineUseCase,
     private val deleteRoutineUseCase: DeleteRoutineUseCase,
     private val restoreRoutineUseCase: RestoreRoutineUseCase,
@@ -47,11 +51,13 @@ class RoutineListViewModel @Inject constructor(
 
     val uiState: StateFlow<RoutineListUiState> = combine(
         getRoutinesUseCase(),
-        routineRepository.getArchivedRoutinesWithDetails()
-    ) { activeRoutines, archivedRoutines ->
+        routineRepository.getArchivedRoutinesWithDetails(),
+        userStatsRepository.getUserStats()
+    ) { activeRoutines, archivedRoutines, stats ->
         RoutineListUiState(
             routines = activeRoutines,
             archivedRoutines = archivedRoutines,
+            userStats = stats,
             isLoading = false
         )
     }.stateIn(

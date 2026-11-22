@@ -8,7 +8,9 @@ import com.excalibur.routines.alarm.AlarmSoundManager
 import com.excalibur.routines.alarm.VoiceAnnouncer
 import com.excalibur.routines.domain.model.Routine
 import com.excalibur.routines.domain.model.RoutineStep
+import com.excalibur.routines.domain.model.UserStats
 import com.excalibur.routines.domain.repository.RoutineRepository
+import com.excalibur.routines.domain.repository.UserStatsRepository
 import com.excalibur.routines.presentation.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -31,7 +33,10 @@ data class ActiveSessionUiState(
     val keepScreenOn: Boolean = true,
     val voiceCuesEnabled: Boolean = true,
     val isBonusLounge: Boolean = false,
-    val activeGameType: MiniGameType = MiniGameType.BERRY_CATCH
+    val activeGameType: MiniGameType = MiniGameType.BERRY_CATCH,
+    val sessionPoints: Int = 0,
+    val userStats: UserStats? = null,
+    val feedbackMessage: String? = null
 ) {
     val currentStep: RoutineStep?
         get() = steps.getOrNull(currentStepIndex)
@@ -55,6 +60,7 @@ data class ActiveSessionUiState(
 class ActiveSessionViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val routineRepository: RoutineRepository,
+    private val userStatsRepository: UserStatsRepository,
     private val alarmSoundManager: AlarmSoundManager,
     private val voiceAnnouncer: VoiceAnnouncer
 ) : ViewModel() {
@@ -66,6 +72,12 @@ class ActiveSessionViewModel @Inject constructor(
     private var timerJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            userStatsRepository.getUserStats().collect { stats ->
+                _uiState.update { it.copy(userStats = stats) }
+            }
+        }
+
         viewModelScope.launch {
             val routineWithDetails = routineRepository.getRoutineWithDetailsOnce(route.routineId)
             if (routineWithDetails != null && routineWithDetails.steps.isNotEmpty()) {
@@ -85,6 +97,23 @@ class ActiveSessionViewModel @Inject constructor(
         }
     }
 
+    fun addSessionPoints(points: Int, reason: String) {
+        if (points <= 0) return
+        _uiState.update {
+            it.copy(
+                sessionPoints = it.sessionPoints + points,
+                feedbackMessage = "+$points pts • $reason"
+            )
+        }
+        viewModelScope.launch {
+            userStatsRepository.addPoints(points)
+        }
+    }
+
+    fun clearFeedbackMessage() {
+        _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
     private fun announceStep(step: RoutineStep, isFirst: Boolean = false) {
         if (!_uiState.value.voiceCuesEnabled) return
         val prefix = if (isFirst) "Starting" else "Next step"
@@ -102,17 +131,21 @@ class ActiveSessionViewModel @Inject constructor(
                     if (current.remainingSecondsInStep > 1) {
                         _uiState.update { it.copy(remainingSecondsInStep = it.remainingSecondsInStep - 1) }
                     } else {
-                        // Step completed! Transition to next step or finish
-                        advanceToNextStep()
+                        // Step completed! Award points and advance
+                        advanceToNextStep(earnedStepPoints = true)
                     }
                 }
             }
         }
     }
 
-    private fun advanceToNextStep() {
+    private fun advanceToNextStep(earnedStepPoints: Boolean = true) {
         val current = _uiState.value
         val nextIndex = current.currentStepIndex + 1
+
+        if (earnedStepPoints) {
+            addSessionPoints(10, "Step Complete! 🎯")
+        }
 
         // Trigger gentle chime or sound for step transition
         viewModelScope.launch {
@@ -133,17 +166,30 @@ class ActiveSessionViewModel @Inject constructor(
             }
             announceStep(nextStep, isFirst = false)
         } else {
-            // Entire routine finished!
-            _uiState.update { it.copy(isFinished = true, remainingSecondsInStep = 0, isBonusLounge = false) }
-            if (current.voiceCuesEnabled) {
-                voiceAnnouncer.speak("Routine complete! Great job!")
-            }
+            // Entire routine finished! Award 100 completion points and record daily streak
             timerJob?.cancel()
+            viewModelScope.launch {
+                val updatedStats = userStatsRepository.recordRoutineCompletion(100)
+                _uiState.update {
+                    it.copy(
+                        isFinished = true,
+                        remainingSecondsInStep = 0,
+                        isBonusLounge = false,
+                        sessionPoints = it.sessionPoints + 100,
+                        userStats = updatedStats,
+                        feedbackMessage = "+100 pts • Routine Complete! 🏆"
+                    )
+                }
+                if (current.voiceCuesEnabled) {
+                    voiceAnnouncer.speak("Routine complete! Great job!")
+                }
+            }
         }
     }
 
     fun enterBonusLounge() {
         val randomGame = MiniGameType.entries.random()
+        addSessionPoints(50, "Early Bird Bonus! ⚡")
         _uiState.update { it.copy(isBonusLounge = true, activeGameType = randomGame) }
         if (_uiState.value.voiceCuesEnabled) {
             voiceAnnouncer.speak("You finished early! Enjoy your bonus time.")
@@ -159,7 +205,7 @@ class ActiveSessionViewModel @Inject constructor(
     }
 
     fun exitBonusLoungeAndAdvance() {
-        advanceToNextStep()
+        advanceToNextStep(earnedStepPoints = false)
     }
 
     fun togglePauseResume() {
@@ -167,20 +213,28 @@ class ActiveSessionViewModel @Inject constructor(
     }
 
     fun skipStep() {
-        advanceToNextStep()
+        advanceToNextStep(earnedStepPoints = false)
     }
 
     fun toggleKeepScreenOn() {
-        _uiState.update { it.copy(keepScreenOn = !it.keepScreenOn) }
+        _uiState.update { current ->
+            val next = !current.keepScreenOn
+            val msg = if (next) "💡 Keep Screen Awake ON" else "🌙 Keep Screen Awake OFF"
+            current.copy(keepScreenOn = next, feedbackMessage = msg)
+        }
     }
 
     fun toggleVoiceCues() {
         _uiState.update { current ->
             val next = !current.voiceCuesEnabled
+            val msg = if (next) "🔊 Voice cues ON" else "🔇 Voice cues OFF"
             if (!next) {
                 voiceAnnouncer.stop()
             }
-            current.copy(voiceCuesEnabled = next)
+            current.copy(voiceCuesEnabled = next, feedbackMessage = msg)
+        }
+        if (_uiState.value.voiceCuesEnabled) {
+            voiceAnnouncer.speak("Voice announcements enabled")
         }
     }
 
