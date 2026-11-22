@@ -191,8 +191,8 @@ fun RoutineListScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         item(key = "gamification_header") {
                             UserGamificationCard(
@@ -381,7 +381,7 @@ fun RoutineCard(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isEditing)
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
@@ -389,7 +389,7 @@ fun RoutineCard(
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
         )
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             // Header: Animal Avatar, Title, Duration Badge, Options Menu & Chevron
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -397,15 +397,15 @@ fun RoutineCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = if (isEditing) editingIcon else routineWithDetails.routine.icon, fontSize = 24.sp)
+                    Text(text = if (isEditing) editingIcon else routineWithDetails.routine.icon, fontSize = 20.sp)
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -448,7 +448,7 @@ fun RoutineCard(
                     }
                 }
 
-                // 3-dot overflow options menu (Duplicate, Delete)
+                // 3-dot overflow options menu (Add Schedule, Duplicate, Delete)
                 var showOptionsMenu by remember { mutableStateOf(false) }
                 Box {
                     IconButton(onClick = { showOptionsMenu = true }) {
@@ -462,6 +462,14 @@ fun RoutineCard(
                         expanded = showOptionsMenu,
                         onDismissRequest = { showOptionsMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Add Schedule") },
+                            leadingIcon = { Icon(Icons.Default.Schedule, null) },
+                            onClick = {
+                                showOptionsMenu = false
+                                onAddSchedule()
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Duplicate Routine") },
                             leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
@@ -492,33 +500,36 @@ fun RoutineCard(
             }
 
             // Quick Run & Edit Steps Action Row
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // "Start Routine" Button
                 FilledTonalButton(
                     onClick = onStart,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f).height(38.dp)
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Start Routine", fontWeight = FontWeight.Bold)
                 }
 
                 OutlinedButton(
                     onClick = onToggleEdit,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(38.dp)
                 ) {
                     Icon(
                         imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(if (isEditing) "Done" else "Edit Steps", fontWeight = FontWeight.SemiBold)
                 }
             }
@@ -714,80 +725,85 @@ fun RoutineCard(
                         }
                     }
 
-                    // 4. Add Step Button
-                    OutlinedButton(
-                        onClick = {
-                            val newStep = RoutineStep(
-                                id = UUID.randomUUID().toString(),
-                                routineId = routineWithDetails.routine.id,
-                                name = "New Step",
-                                orderIndex = editingSteps.size,
-                                durationMinutes = 5,
-                                durationSeconds = 0,
-                                isForcefulAlarm = false
-                            )
-                            val updated = editingSteps + newStep
-                            editingSteps = updated
-                            expandedStepId = newStep.id
-                            onUpdateRoutine(
-                                routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
-                                updated
-                            )
-                        },
+                    // 4. Action Buttons (Add Step & Done side by side)
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Add Step", fontWeight = FontWeight.Bold)
-                    }
+                        OutlinedButton(
+                            onClick = {
+                                val newStep = RoutineStep(
+                                    id = UUID.randomUUID().toString(),
+                                    routineId = routineWithDetails.routine.id,
+                                    name = "New Step",
+                                    orderIndex = editingSteps.size,
+                                    durationMinutes = 5,
+                                    durationSeconds = 0,
+                                    isForcefulAlarm = false
+                                )
+                                val updated = editingSteps + newStep
+                                editingSteps = updated
+                                expandedStepId = newStep.id
+                                onUpdateRoutine(
+                                    routineWithDetails.routine.copy(name = editingName, icon = editingIcon),
+                                    updated
+                                )
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add Step", fontWeight = FontWeight.Bold)
+                        }
 
-                    // 5. Done Editing Button
-                    Button(
-                        onClick = onToggleEdit,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Done Editing", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = onToggleEdit,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Done", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 14.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-            )
-
-            // Schedules Section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Schedules (${routineWithDetails.schedules.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+            // Schedules Section (shown compactly if active, or when editing)
+            if (routineWithDetails.schedules.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                 )
-
-                TextButton(onClick = onAddSchedule) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Add Schedule", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Schedules (${routineWithDetails.schedules.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(
+                        onClick = onAddSchedule,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("Add", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-            }
-
-            if (routineWithDetails.schedules.isEmpty()) {
-                Text(
-                    text = "No alarm schedules set yet. Tap 'Add Schedule' to set exact alarm times.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     routineWithDetails.schedules.forEach { schedule ->
                         ScheduleItemRow(
                             schedule = schedule,
@@ -795,6 +811,32 @@ fun RoutineCard(
                             onEdit = { onEditSchedule(schedule.id) },
                             onDelete = { onDeleteSchedule(schedule.id) }
                         )
+                    }
+                }
+            } else if (isEditing) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 10.dp, bottom = 6.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Alarm Schedule",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(
+                        onClick = onAddSchedule,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Schedule", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -843,7 +885,7 @@ fun InlineStepAccordionItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(horizontal = 10.dp, vertical = 7.dp)
         ) {
             // Summary row: Grab handle, step name, duration badge, expand chevron
             Row(
@@ -860,8 +902,8 @@ fun InlineStepAccordionItem(
                     // Continuous floating drag handle
                     Box(
                         modifier = Modifier
-                            .padding(end = 8.dp)
-                            .size(36.dp)
+                            .padding(end = 6.dp)
+                            .size(28.dp)
                             .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragStart = {
@@ -1069,12 +1111,12 @@ fun ScheduleItemRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1088,9 +1130,9 @@ fun ScheduleItemRow(
                     imageVector = Icons.Default.Schedule,
                     contentDescription = null,
                     tint = if (schedule.isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
                         text = schedule.formattedTime,
@@ -1106,23 +1148,27 @@ fun ScheduleItemRow(
             }
 
             // Visible Action Row with Edit & Delete & Switch
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onEdit) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Edit,
                         contentDescription = "Edit Schedule",
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                IconButton(onClick = onDelete) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.DeleteOutline,
                         contentDescription = "Delete Schedule",
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.outline
                     )
                 }
+                Spacer(modifier = Modifier.width(4.dp))
                 Switch(
                     checked = schedule.isEnabled,
                     onCheckedChange = onToggle
@@ -1427,7 +1473,7 @@ fun UserGamificationCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -1441,11 +1487,11 @@ fun UserGamificationCard(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("⭐", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("⭐", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Level ${userStats.level} • ${userStats.levelTitle}",
                             style = MaterialTheme.typography.labelMedium,
@@ -1460,10 +1506,10 @@ fun UserGamificationCard(
                     color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("🔥", fontSize = 14.sp)
+                        Text("🔥", fontSize = 13.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "${userStats.currentStreak} Day Streak",
@@ -1479,10 +1525,10 @@ fun UserGamificationCard(
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("🧊", fontSize = 14.sp)
+                        Text("🧊", fontSize = 13.sp)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "${userStats.streakFreezesAvailable} Freeze Available",
@@ -1494,7 +1540,7 @@ fun UserGamificationCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1510,7 +1556,7 @@ fun UserGamificationCard(
                     )
                     Text(
                         text = "${userStats.totalPoints} pts",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1524,14 +1570,14 @@ fun UserGamificationCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             LinearProgressIndicator(
                 progress = { userStats.levelProgressFraction },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp)),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
